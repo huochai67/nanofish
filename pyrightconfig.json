@@ -1,0 +1,14 @@
+{
+  "include": [
+    "src",
+  ],
+  "exclude": [
+    "**/__pycache__"
+  ],
+  "venv": ".venv",
+  "venvPath": "./.venv",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "pythonVersion": "3.11.14",
+  "pythonPlatform": "Linux"
+}
