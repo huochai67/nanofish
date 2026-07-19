@@ -45,11 +45,14 @@ config: Config = get_plugin_config(Config)
 
 acl_store.load()
 quota_tracker.load()
+_groups = config.acl_allowed_groups
 logger.info(
     "[acl] loaded "
-    f"(admins={len(config.acl_admins)}, "
-    f"groups_whitelist={len(config.acl_allowed_groups) or 'all'}, "
-    f"private={config.acl_allow_private})"
+    f"(admins={list(config.acl_admins)}, "
+    f"groups={_groups or 'all'}, "
+    f"private={config.acl_allow_private}, "
+    f"perm_llm={config.acl_perm_llm.label()}, "
+    f"perm_eh={config.acl_perm_eh.label()})"
 )
 
 auth = on_command("auth", priority=5, block=True)
