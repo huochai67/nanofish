@@ -122,6 +122,9 @@ venv.bak/
 node_modules/
 app/.next/
 
+# Generated EH tag translation SQLite (built from db.text.json via ehsql.py)
+src/plugins/ehsearch/sql/*.db
+
 # Spyder project settings
 .spyderproject
 .spyproject

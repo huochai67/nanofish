@@ -105,6 +105,14 @@ docker compose up -d --build
 | `EH_DB` / `EH_IPB_*` / `EH_SK` / `EH_IGNEOUS` | EH 搜索与标签库 |
 | `PROXY` | 可选 HTTP 代理 |
 
+标签翻译库 `EH_DB`（默认 `src/plugins/ehsearch/sql/o.db`）由 `db.text.json` **生成**，不入库。首次加载插件时会自动构建；也可手动：
+
+```bash
+python src/plugins/ehsearch/sql/ehsql.py
+# 或指定路径
+python src/plugins/ehsearch/sql/ehsql.py -j src/plugins/ehsearch/sql/db.text.json -o "$EH_DB"
+```
+
 ## 开发
 
 ```bash

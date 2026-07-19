@@ -8,6 +8,7 @@ from .config import Config
 from .ehapi import EhAPI
 from .ehtag import TagTranslator
 from .pasters import upload_to_paste_rs
+from .sql import ensure_tag_db
 
 require("acl")
 require("utils")
@@ -31,6 +32,8 @@ ehapi = EhAPI(
         "igneous": config.eh_igneous,
     },
 )
+# o.db is generated from db.text.json and is not committed to git
+ensure_tag_db(config.eh_db)
 ehtranslator = TagTranslator(db_path=config.eh_db)
 
 ehsearch = on_command("eh", priority=10, block=True, permission=require_command("eh"))

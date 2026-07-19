@@ -36,4 +36,7 @@ RUN pip install --no-cache-dir gunicorn uvicorn[standard] nonebot2 \
   && pip install --no-cache-dir --no-index --force-reinstall --find-links=/wheel -r /wheel/requirements.txt && rm -rf /wheel
 COPY . /app/
 
+# Generate EH tag translation DB from committed JSON (o.db is gitignored)
+RUN python src/plugins/ehsearch/sql/ehsql.py
+
 CMD ["/start.sh"]

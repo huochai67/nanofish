@@ -1,117 +1,146 @@
+"""Build EH tag translation SQLite DB from EhTagTranslation JSON."""
+
+from __future__ import annotations
+
+import argparse
 import json
 import sqlite3
 import sys
+from pathlib import Path
+
+SQL_DIR = Path(__file__).resolve().parent
+DEFAULT_JSON = SQL_DIR / "db.text.json"
+DEFAULT_DB = SQL_DIR / "o.db"
+
+CREATE_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS tags_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    namespace TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    tran TEXT NOT NULL,
+    UNIQUE(namespace, tag)
+);
+"""
+
+INSERT_SQL = (
+    "INSERT OR IGNORE INTO tags_data (namespace, tag, tran) VALUES (?, ?, ?)"
+)
 
 
-def create_database_and_table(db_path):
-    """连接到SQLite数据库并创建表（如果不存在）"""
-    try:
-        # 连接到数据库，如果文件不存在则会创建
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-
-        # 创建表的SQL语句
-        # 添加了 UNIQUE 约束来防止 (namespace, tag) 组合的重复记录
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS tags_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            namespace TEXT NOT NULL,
-            tag TEXT NOT NULL,
-            tran TEXT NOT NULL,
-            UNIQUE(namespace, tag)
-        );
-        """
-        cursor.execute(create_table_query)
-        conn.commit()
-        return conn, cursor
-    except sqlite3.Error as e:
-        print(f"数据库错误: {e}", file=sys.stderr)
-        return None, None
-
-
-def process_json_to_sqlite(json_path, db_path):
+def process_json_to_sqlite(json_path: str | Path, db_path: str | Path) -> tuple[int, int]:
     """
-    读取JSON文件，解析数据，并将其插入SQLite数据库。
+    Read tag JSON and write/overwrite a SQLite database.
+
+    Returns:
+        (inserted_count, skipped_count)
     """
-    # 1. 连接数据库并创建表
-    conn, cursor = create_database_and_table(db_path)
-    if not conn:
-        return
+    json_path = Path(json_path)
+    db_path = Path(db_path)
 
-    # 2. 读取并解析JSON文件
-    try:
-        with open(json_path, encoding="utf-8") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        print(f"错误: JSON文件未找到 '{json_path}'", file=sys.stderr)
-        conn.close()
-        return
-    except json.JSONDecodeError:
-        print(f"错误: JSON文件格式无效 '{json_path}'", file=sys.stderr)
-        conn.close()
-        return
+    if not json_path.is_file():
+        raise FileNotFoundError(f"JSON file not found: {json_path}")
 
-    # 3. 遍历数据并插入数据库
-    insert_count = 0
-    skipped_count = 0
+    with json_path.open(encoding="utf-8") as f:
+        data = json.load(f)
 
-    # 检查顶层'data'键是否存在且为列表
     if "data" not in data or not isinstance(data["data"], list):
-        print("错误: JSON文件缺少顶层 'data' 数组，或其格式不正确。", file=sys.stderr)
+        raise ValueError("JSON missing top-level 'data' array")
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    if db_path.exists():
+        db_path.unlink()
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(CREATE_TABLE_SQL)
+
+        insert_count = 0
+        skipped_count = 0
+
+        for item in data["data"]:
+            try:
+                namespace = item["namespace"]
+                if "data" not in item or not isinstance(item["data"], dict):
+                    print(
+                        f"warning: namespace '{namespace}' missing data dict, skipped",
+                        file=sys.stderr,
+                    )
+                    continue
+
+                for key, value in item["data"].items():
+                    tag = key
+                    tran = value["name"]
+                    cursor.execute(INSERT_SQL, (namespace, tag, tran))
+                    if cursor.rowcount > 0:
+                        insert_count += 1
+                    else:
+                        skipped_count += 1
+            except KeyError as e:
+                print(f"warning: missing key {e}, record skipped", file=sys.stderr)
+            except TypeError:
+                print("warning: unexpected record shape, skipped", file=sys.stderr)
+
+        conn.commit()
+    finally:
         conn.close()
-        return
 
-    # 遍历 `json['data']` 数组 (第一层)
-    for item in data["data"]:
-        try:
-            # 提取 namespace
-            namespace = item["namespace"]
+    return insert_count, skipped_count
 
-            # 检查内部'data'键是否存在且为列表
-            if "data" not in item or not isinstance(item["data"], dict):
-                print(
-                    f"警告: 在 namespace '{namespace}' 中缺少'dict'数组，已跳过。",
-                    file=sys.stderr,
-                )
-                continue
 
-            # 遍历 `item['data']` 数组 (第二层)
-            for index, key in enumerate(item["data"].keys()):
-                value = item["data"][key]
-                # 提取 tag 和 tran
-                tag = key
-                tran = value["name"]
+def ensure_tag_db(
+    db_path: str | Path,
+    json_path: str | Path | None = None,
+    *,
+    force: bool = False,
+) -> Path:
+    """
+    Ensure the tag SQLite DB exists; build from JSON if missing (or force=True).
+    """
+    db_path = Path(db_path)
+    json_path = Path(json_path) if json_path is not None else DEFAULT_JSON
 
-                # 准备插入数据
-                sql = "INSERT OR IGNORE INTO tags_data (namespace, tag, tran) VALUES (?, ?, ?)"
-                cursor.execute(sql, (namespace, tag, tran))
+    if db_path.is_file() and not force:
+        return db_path
 
-                # cursor.rowcount 会返回受上一条命令影响的行数
-                # 如果是1，表示插入成功；如果是0，表示因为UNIQUE约束而忽略了
-                if cursor.rowcount > 0:
-                    insert_count += 1
-                else:
-                    skipped_count += 1
+    inserted, skipped = process_json_to_sqlite(json_path, db_path)
+    print(
+        f"built EH tag DB: {db_path} "
+        f"(inserted={inserted}, skipped={skipped}, source={json_path})"
+    )
+    return db_path
 
-        except KeyError as e:
-            print(f"警告: 在处理某条记录时缺少键 {e}，已跳过该记录。", file=sys.stderr)
-            continue
-        except TypeError:
-            print("警告: 记录的结构不符合预期，已跳过。", file=sys.stderr)
-            continue
 
-    # 4. 提交更改并关闭连接
-    conn.commit()
-    conn.close()
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Build EH tag translation SQLite DB")
+    parser.add_argument(
+        "-j",
+        "--json",
+        type=Path,
+        default=DEFAULT_JSON,
+        help=f"source JSON (default: {DEFAULT_JSON})",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=DEFAULT_DB,
+        help=f"output SQLite path (default: {DEFAULT_DB})",
+    )
+    parser.add_argument(
+        "--skip-if-exists",
+        action="store_true",
+        help="do nothing if the output DB already exists",
+    )
+    args = parser.parse_args(argv)
 
-    print("处理完成！")
-    print(f"成功插入 {insert_count} 条新记录。")
-    print(f"因重复而跳过 {skipped_count} 条记录。")
-    print(f"数据库已保存至: {db_path}")
+    try:
+        ensure_tag_db(args.output, args.json, force=not args.skip_if_exists)
+    except (OSError, ValueError, json.JSONDecodeError, sqlite3.Error) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    # 执行主函数
-    process_json_to_sqlite(
-        r"F:\python\nanofish2\src\plugins\ehsearch\sql\db.text.json", "o.db"
-    )
+    raise SystemExit(main())
