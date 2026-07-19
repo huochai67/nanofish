@@ -1,4 +1,3 @@
-import httpx
 from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent
 from nonebot.adapters.onebot.v11.message import Message
@@ -8,7 +7,7 @@ from nonebot.plugin import PluginMetadata
 from .config import Config
 
 require("utils")
-from ..utils import get_first_image, get_reply
+from ..utils import HttpRequestError, get_first_image, get_reply, http_get
 
 __plugin_meta__ = PluginMetadata(
     name="genai-detect",
@@ -37,25 +36,40 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         await genai.finish("被回复消息中没有图片")
         return
 
-    async with httpx.AsyncClient(proxy=config.proxy) as client:
-        req = await client.get(
-            url="https://api.sightengine.com/1.0/check.json",
+    try:
+        req = await http_get(
+            "https://api.sightengine.com/1.0/check.json",
             params={
                 "url": imageurl,
                 "models": "genai",
                 "api_user": config.sightengine_api_user,
                 "api_secret": config.sightengine_api_secret,
             },
+            proxy=config.proxy,
         )
-        req.raise_for_status()
         output = req.json()
+    except HttpRequestError as e:
+        logger.warning(f"sightengine api error: {e}")
+        await genai.finish(f"Sightengine API {e.message}")
+        return
+    except Exception as e:  # noqa: BLE001
+        logger.exception("sightengine api unexpected error")
+        await genai.finish(f"Sightengine API 处理失败: {type(e).__name__}: {e}")
+        return
 
     if output.get("status") != "success":
         logger.debug(f"sightengine api failed: {output}")
-        await genai.finish("Sightengine API 请求失败")
+        error = output.get("error") or output.get("message") or output
+        await genai.finish(f"Sightengine API 请求失败: {error}")
         return
 
-    rate = float(output["type"]["ai_generated"])
+    try:
+        rate = float(output["type"]["ai_generated"])
+    except (KeyError, TypeError, ValueError) as e:
+        logger.warning(f"sightengine api unexpected response: {output}")
+        await genai.finish(f"Sightengine API 返回数据异常: {e}")
+        return
+
     if rate < AI_UNLIKELY_THRESHOLD:
         ret = "不太可能是 AI 生成"
     elif rate > AI_LIKELY_THRESHOLD:

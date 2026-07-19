@@ -4,10 +4,11 @@ from nonebot.adapters.onebot.v11.message import Message
 from nonebot.plugin import PluginMetadata
 
 from .config import Config
+from .http import HttpRequestError, http_client, http_get, http_post
 
 __plugin_meta__ = PluginMetadata(
     name="utils",
-    description="共享消息解析工具",
+    description="共享消息解析与 HTTP 工具",
     usage="",
     config=Config,
 )
@@ -51,3 +52,16 @@ async def get_reply(bot: Bot, msg: Message) -> dict | None:
     if message_id is None:
         return None
     return await bot.get_msg(message_id=message_id)
+
+
+__all__ = [
+    "HttpRequestError",
+    "get_first_image",
+    "get_globalconfig",
+    "get_plaintext",
+    "get_reply",
+    "get_replyid",
+    "http_client",
+    "http_get",
+    "http_post",
+]

@@ -4,8 +4,9 @@ import threading
 from typing import Any, ClassVar, Self
 
 import cloudscraper
-import httpx
 from loguru import logger
+
+from ..utils.http import http_post
 
 
 class EhMetaData:
@@ -122,15 +123,14 @@ class EhAPI:
         if len(results) > size:
             results = results[:size]
 
-        async with httpx.AsyncClient(proxy=self.proxy) as client:
-            response = await client.post(
-                url="https://api.e-hentai.org/api.php",
-                json={
-                    "method": "gdata",
-                    "gidlist": results,
-                    "namespace": 1,
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            return [EhMetaData(**item) for item in data["gmetadata"]]
+        response = await http_post(
+            "https://api.e-hentai.org/api.php",
+            proxy=self.proxy,
+            json={
+                "method": "gdata",
+                "gidlist": results,
+                "namespace": 1,
+            },
+        )
+        data = response.json()
+        return [EhMetaData(**item) for item in data["gmetadata"]]

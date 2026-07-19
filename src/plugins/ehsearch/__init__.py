@@ -1,6 +1,7 @@
 from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent
 from nonebot.adapters.onebot.v11.message import Message
+from nonebot.exception import FinishedException
 from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
 
@@ -10,7 +11,7 @@ from .ehtag import TagTranslator
 from .pasters import upload_to_paste_rs
 
 require("utils")
-from ..utils import get_plaintext, get_reply
+from ..utils import HttpRequestError, get_plaintext, get_reply
 
 __plugin_meta__ = PluginMetadata(
     name="ehsearch",
@@ -47,23 +48,35 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         return
 
     logger.info(f"searching {search}")
-    result = await ehapi.search(title=search, size=3)
-    logger.debug(result)
+    try:
+        result = await ehapi.search(title=search, size=3)
+        logger.debug(result)
 
-    if not result:
-        await ehsearch.finish("未找到相关结果")
+        if not result:
+            await ehsearch.finish("未找到相关结果")
+            return
+
+        lines: list[str] = []
+        for i, r in enumerate(result):
+            r.tags = ehtranslator.trans_all(r.tags)
+            lines.append(f"[{i}][{r.category}]{r.title}")
+            lines.append(
+                f"\t Uploader: {r.uploader}\t time: {r.posted}\t pages: {r.filecount}"
+            )
+            lines.append(f"\t thumb: {r.thumb}\t url:{r.url()}")
+            lines.append(f"\t tags: {r.tags}\n")
+
+        output = "\n".join(lines)
+        url = await upload_to_paste_rs(text_content=output, proxy=config.proxy)
+    except FinishedException:
+        raise
+    except HttpRequestError as e:
+        logger.warning(f"ehsearch request error: {e}")
+        await ehsearch.finish(f"请求失败: {e.message}")
+        return
+    except Exception as e:  # noqa: BLE001
+        logger.exception("ehsearch unexpected error")
+        await ehsearch.finish(f"处理失败: {type(e).__name__}: {e}")
         return
 
-    lines: list[str] = []
-    for i, r in enumerate(result):
-        r.tags = ehtranslator.trans_all(r.tags)
-        lines.append(f"[{i}][{r.category}]{r.title}")
-        lines.append(
-            f"\t Uploader: {r.uploader}\t time: {r.posted}\t pages: {r.filecount}"
-        )
-        lines.append(f"\t thumb: {r.thumb}\t url:{r.url()}")
-        lines.append(f"\t tags: {r.tags}\n")
-
-    output = "\n".join(lines)
-    url = await upload_to_paste_rs(text_content=output, proxy=config.proxy)
     await ehsearch.finish(f"找到 {len(result)} 条结果: {url}")

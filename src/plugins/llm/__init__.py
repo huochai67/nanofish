@@ -5,7 +5,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Literal, Self
 
-import httpx
 import litellm
 from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
@@ -13,7 +12,9 @@ from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
 
 require("app")
+require("utils")
 from ..app import app_chat_image_cq
+from ..utils import http_get
 from .config import Config
 
 __plugin_meta__ = PluginMetadata(
@@ -29,19 +30,17 @@ llm = on_command("llm")
 
 
 async def download_and_extract_zip(url: str) -> list[tuple[str, str]]:
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url)
-        response.raise_for_status()
+    response = await http_get(url)
 
-        zip_buffer = BytesIO(response.content)
-        result: list[tuple[str, str]] = []
-        with zipfile.ZipFile(zip_buffer, "r") as zip_file:
-            for file_info in zip_file.filelist:
-                if not file_info.is_dir():
-                    file_content = zip_file.read(file_info.filename)
-                    encoded_content = base64.b64encode(file_content).decode("utf-8")
-                    result.append((file_info.filename, encoded_content))
-        return result
+    zip_buffer = BytesIO(response.content)
+    result: list[tuple[str, str]] = []
+    with zipfile.ZipFile(zip_buffer, "r") as zip_file:
+        for file_info in zip_file.filelist:
+            if not file_info.is_dir():
+                file_content = zip_file.read(file_info.filename)
+                encoded_content = base64.b64encode(file_content).decode("utf-8")
+                result.append((file_info.filename, encoded_content))
+    return result
 
 
 class CompletionMessage:
