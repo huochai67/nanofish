@@ -21,11 +21,8 @@ export default function App() {
         if (dataParam) {
           try {
             const urldecode = decodeURIComponent(dataParam);
-            console.log(urldecode);
             const decoded = atob(urldecode);
-            console.log(decoded);
             const parsed = JSON.parse(decoded) as ChatData;
-            console.log(parsed);
             setChatData(parsed);
           } catch (e) {
             console.error("Failed to parse URL data", e);

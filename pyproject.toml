@@ -36,7 +36,7 @@ nonebot-adapter-onebot = [
 nonebot-plugin-localstore = ["nonebot_plugin_localstore"]
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py311"
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -96,14 +96,22 @@ ignore = [
     "ANN401",  # any-type
     "COM812",  # missing-trailing-comma
     "PLC0415", # import-outside-top-level
+    "TID252",  # relative import from parent  # nonebot plugins use require + relative
+    "PLR0913", # too-many-arguments  # API data models
+    "TRY003",  # long exception messages
 ]
 allowed-confusables = ["，", "。", "“", "”", "：", "；", "？", "！", "【", "】", "《", "》", "…", "—", "（", "）", "、"]
 
 [tool.ruff.lint.pyupgrade]
 keep-runtime-typing = true
 
+[tool.ruff.lint.per-file-ignores]
+"src/plugins/ehsearch/sql/**" = ["ALL"]
+"src/plugins/ehsearch/ehtag.py" = ["ANN002", "ANN003", "ANN204", "ARG004", "E501"]
+"src/plugins/ehsearch/pasters.py" = ["E501", "TRY300"]
+
 [tool.pyright]
 # For Pylance/Pyright configurations, see https://microsoft.github.io/pyright/#/configuration.
-pythonVersion = "3.9"
+pythonVersion = "3.11"
 pythonPlatform = "All"
 typeCheckingMode = "standard"

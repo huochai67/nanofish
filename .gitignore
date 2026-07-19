@@ -110,12 +110,17 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+.ruff_cache/
+node_modules/
+app/.next/
 
 # Spyder project settings
 .spyderproject

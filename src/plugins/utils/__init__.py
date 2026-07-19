@@ -7,7 +7,7 @@ from .config import Config
 
 __plugin_meta__ = PluginMetadata(
     name="utils",
-    description="",
+    description="共享消息解析工具",
     usage="",
     config=Config,
 )
@@ -19,14 +19,17 @@ def get_globalconfig() -> Config:
     return _config
 
 
-def get_replyid(msg: Message) -> None | int:
+def get_replyid(msg: Message) -> int | None:
     for segment in msg:
         if segment.type == "reply":
-            return segment.data.get("id")
+            reply_id = segment.data.get("id")
+            if reply_id is None:
+                return None
+            return int(reply_id)
     return None
 
 
-def get_first_image(msg: Message) -> None | str:
+def get_first_image(msg: Message) -> str | None:
     for segment in msg:
         if segment.type == "image":
             return segment.data.get("url")
@@ -34,15 +37,17 @@ def get_first_image(msg: Message) -> None | str:
 
 
 def get_plaintext(msg: Message) -> str:
-    ret = ""
+    parts: list[str] = []
     for segment in msg:
         if segment.type == "text":
-            ret += str(segment.data.get("text"))
-    return ret
+            text = segment.data.get("text")
+            if text:
+                parts.append(str(text))
+    return "".join(parts)
 
 
-async def get_reply(bot: Bot, msg: Message) -> None | dict:
+async def get_reply(bot: Bot, msg: Message) -> dict | None:
     message_id = get_replyid(msg)
-    if message_id:
-        return await bot.get_msg(message_id=message_id)
-    return None
+    if message_id is None:
+        return None
+    return await bot.get_msg(message_id=message_id)

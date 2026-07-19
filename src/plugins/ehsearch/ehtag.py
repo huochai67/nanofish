@@ -106,61 +106,9 @@ class TagTranslator:
 
         return translated_list
 
-    def close(self):
+    def close(self) -> None:
         """关闭数据库连接。"""
         if hasattr(self, "conn") and self.conn:
             self.conn.close()
-            print("--- 数据库连接已关闭 ---")
-            self._initialized = False  # 标记为未初始化，以便可以重新创建（如果需要）
-
-
-if __name__ == "__main__":
-    import os
-
-    DB_FILE = r"F:\python\nanofish2\src\plugins\ehsearch\sql\o.db"
-
-    # 2. 获取 TagTranslator 的实例
-    # 无论调用多少次，都将返回同一个对象实例
-    translator1 = TagTranslator(db_path=DB_FILE)
-    translator2 = TagTranslator(db_path=DB_FILE)  # 这里的初始化信息不会再次打印
-
-    # 验证是否为同一个实例
-    print(
-        f"\n- translator1 和 translator2 是同一个实例吗? {translator1 is translator2}\n"
-    )
-
-    # 3. 准备要翻译的输入数据
-    #    - 'language:translated' 和 'artist:van_gogh' 应该能被翻译
-    #    - 'character:nonexistent_char' 在数据库中不存在，应该返回 'tag' 部分
-    #    - 'invalid-format' 是一个错误格式的输入
-    input_list = [
-        "language:english",
-        "language:translated",
-        "parody:blue archive",
-        "character:kisaki ryuuge",
-        "character:sensei",
-        "group:poison gray",
-        "artist:matsuriuta",
-        "female:chinese dress",
-        "female:defloration",
-        "female:hair buns",
-        "female:halo",
-        "female:impregnation",
-        "female:lolicon",
-        "female:nakadashi",
-        "female:sole female",
-        "female:twintails",
-        "other:multi-work series",
-        "other:rough translation",
-    ]
-
-    print(f"输入列表: {input_list}")
-
-    # 4. 调用 trans_all 方法进行翻译
-    output_list = translator1.trans_all(input_list)
-
-    # 5. 打印结果
-    print(f"翻译结果: {output_list}")
-
-    # 6. 程序结束时，关闭数据库连接
-    translator1.close()
+            logger.info("TagTranslator 数据库连接已关闭")
+            self._initialized = False

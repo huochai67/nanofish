@@ -1,6 +1,5 @@
 import json
 import sqlite3
-import argparse
 import sys
 
 
@@ -41,7 +40,7 @@ def process_json_to_sqlite(json_path, db_path):
 
     # 2. 读取并解析JSON文件
     try:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         print(f"错误: JSON文件未找到 '{json_path}'", file=sys.stderr)
@@ -98,7 +97,7 @@ def process_json_to_sqlite(json_path, db_path):
             print(f"警告: 在处理某条记录时缺少键 {e}，已跳过该记录。", file=sys.stderr)
             continue
         except TypeError:
-            print(f"警告: 记录的结构不符合预期，已跳过。", file=sys.stderr)
+            print("警告: 记录的结构不符合预期，已跳过。", file=sys.stderr)
             continue
 
     # 4. 提交更改并关闭连接
@@ -112,7 +111,6 @@ def process_json_to_sqlite(json_path, db_path):
 
 
 if __name__ == "__main__":
-
     # 执行主函数
     process_json_to_sqlite(
         r"F:\python\nanofish2\src\plugins\ehsearch\sql\db.text.json", "o.db"

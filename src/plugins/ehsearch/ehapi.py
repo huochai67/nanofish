@@ -1,6 +1,7 @@
 import asyncio
 import re
 import threading
+from typing import Any, ClassVar, Self
 
 import cloudscraper
 import httpx
@@ -8,7 +9,6 @@ from loguru import logger
 
 
 class EhMetaData:
-    # --- 这里是您的属性定义 ---
     gid: int
     token: str
     title: str
@@ -22,7 +22,6 @@ class EhMetaData:
     rating: str
     tags: list[str]
 
-    # --- 生成的 __init__ 方法 ---
     def __init__(
         self,
         gid: int,
@@ -37,8 +36,8 @@ class EhMetaData:
         filesize: int,
         rating: str,
         tags: list[str],
-        **kwargs,
-    ):
+        **_kwargs: Any,
+    ) -> None:
         self.gid = gid
         self.token = token
         self.title = title
@@ -56,87 +55,82 @@ class EhMetaData:
         return f"https://exhentai.org/g/{self.gid}/{self.token}/"
 
     def __repr__(self) -> str:
-        return f"[{self.category}]{self.title} \n\tDate: {self.posted} \n\tTags: {self.tags} \n\tUrl: {self.url()} \n\tThumbnail: {self.thumb}"  # noqa: E501
+        return (
+            f"[{self.category}]{self.title} \n\tDate: {self.posted} "
+            f"\n\tTags: {self.tags} \n\tUrl: {self.url()} \n\tThumbnail: {self.thumb}"
+        )
 
 
 class EhAPI:
-    _instance = None
-    _lock = threading.Lock()  # 用于确保线程安全的单例创建
+    _instance: ClassVar[Self | None] = None
+    _lock: ClassVar[threading.Lock] = threading.Lock()
 
-    def __new__(cls, *args, **kwargs):
-        """
-        重写 __new__ 方法来实现单例模式。
-        """
+    def __new__(cls, *_args: Any, **_kwargs: Any) -> Self:
         if not cls._instance:
             with cls._lock:
-                # 再次检查，防止多线程环境下重复创建实例
                 if not cls._instance:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, proxy: str | None = None) -> None:
-        # 防止重复初始化
+    def __init__(
+        self,
+        proxy: str | None = None,
+        cookies: dict[str, str] | None = None,
+    ) -> None:
         if hasattr(self, "_initialized") and self._initialized:
             return
 
-        self.proxy = None
-        self.reqproxy = None
+        self.proxy = proxy
+        self.reqproxy = {"http": proxy, "https": proxy} if proxy else None
+        self.cookies = cookies or {}
+
         if proxy:
             logger.debug(f"setting up proxy {proxy}")
-            self.proxy = proxy
-            self.reqproxy = {"http": self.proxy, "https": self.proxy}
 
-        # Optimized configuration for v3 challenges
         self.scraper = cloudscraper.create_scraper(
-            interpreter="js2py",  # Recommended for v3 challenges
-            delay=5,  # Allow more time for complex challenges
-            debug=False,  # Enable debug output to see v3 detection
+            interpreter="js2py",
+            delay=5,
+            debug=False,
         )
         self._initialized = True
-        logger.info("初始化完成")
+        logger.info("EhAPI 初始化完成")
 
     async def search(self, title: str, size: int = 10) -> list[EhMetaData]:
-        cookies = {
-            "ipb_member_id": "***REMOVED***",
-            "ipb_pass_hash": "***REMOVED***",
-            "sk": "***REMOVED***",
-            "igneous": "***REMOVED***",
-        }
+        if not self.cookies:
+            raise ValueError("EhAPI cookies not configured")
 
         response = await asyncio.to_thread(
             self.scraper.get,
             url=r"https://exhentai.org/",
             params={"f_search": title},
-            cookies=cookies,
+            cookies=self.cookies,
             proxies=self.reqproxy,
         )
 
         pattern = (
             r"https://exhentai.org/g/(?P<gallery_id>\d+)/(?P<gallery_token>[0-9a-f]+)/"
         )
-        results = []
+        results: list[list[str]] = []
         for match in re.finditer(pattern, response.text):
-            # 通过名称获取捕获组的内容
             gallery_id = match.group("gallery_id")
             gallery_token = match.group("gallery_token")
             results.append([gallery_id, gallery_token])
 
-        items = []
-        if len(results) > 0:
-            async with httpx.AsyncClient(proxy=self.proxy) as client:
-                if len(results) > size:
-                    results = results[:size]
+        if not results:
+            return []
 
-                response = await client.post(
-                    url="https://api.e-hentai.org/api.php",
-                    json={
-                        "method": "gdata",
-                        "gidlist": results,
-                        "namespace": 1,
-                    },
-                )
+        if len(results) > size:
+            results = results[:size]
 
-                j = response.json()
-                items = [EhMetaData(**item) for item in j["gmetadata"]]
-
-        return items
+        async with httpx.AsyncClient(proxy=self.proxy) as client:
+            response = await client.post(
+                url="https://api.e-hentai.org/api.php",
+                json={
+                    "method": "gdata",
+                    "gidlist": results,
+                    "namespace": 1,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            return [EhMetaData(**item) for item in data["gmetadata"]]

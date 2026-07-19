@@ -20,8 +20,8 @@ from .config import Config
 
 __plugin_meta__ = PluginMetadata(
     name="llm",
-    description="",
-    usage="",
+    description="多模态 LLM 对话，结果以截图回传",
+    usage="/llm <内容>，可附带图片/文件，或回复消息",
     config=Config,
 )
 
@@ -31,103 +31,24 @@ llm = on_command("llm")
 
 
 async def download_and_extract_zip(url: str) -> list[tuple[str, str]]:
-    """
-    Download a ZIP file asynchronously and extract its contents.
-
-    Args:
-        url: The URL of the ZIP file to download
-
-    Returns:
-        A list of tuples containing (filename, base64_encoded_content)
-    """
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         response.raise_for_status()
 
-        # Read ZIP file from bytes
         zip_buffer = BytesIO(response.content)
-
-        result = []
+        result: list[tuple[str, str]] = []
         with zipfile.ZipFile(zip_buffer, "r") as zip_file:
             for file_info in zip_file.filelist:
-                # Skip directories
                 if not file_info.is_dir():
                     file_content = zip_file.read(file_info.filename)
                     encoded_content = base64.b64encode(file_content).decode("utf-8")
                     result.append((file_info.filename, encoded_content))
-
         return result
-
-
-class Input:
-    def __init__(self) -> None:
-        self.input = []
-
-    def role(self, _role: Literal["user", "system", "developer"]) -> Self:
-        self.input.append(
-            {
-                "role": _role,
-                "content": [],
-            }
-        )
-        return self
-
-    def check_input(self) -> None:
-        if len(self.input) == 0:
-            raise BufferError("请先设置角色")
-
-    def text(self, _text: str) -> Self:
-        self.check_input()
-        self.input[-1]["content"].append(
-            {
-                "type": "input_text",
-                "text": _text,
-            }
-        )
-
-        return self
-
-    def image(self, image_url: str) -> Self:
-        self.check_input()
-        self.input[-1]["content"].append(
-            {
-                "type": "input_image",
-                "image_url": image_url,
-            }
-        )
-
-        return self
-
-    def images(self, image_urls: list[str]) -> Self:
-        self.check_input()
-        for image_url in image_urls:
-            self.input[-1]["content"].append(
-                {
-                    "type": "input_image",
-                    "image_url": image_url,
-                }
-            )
-        return self
-
-    def file(self, file_url: str, filename: str) -> Self:
-        self.check_input()
-        self.input[-1]["content"].append(
-            {
-                "type": "input_file",
-                "file_url": file_url,
-                "filename": filename,
-            }
-        )
-
-        return self
-
-    def build(self) -> list:
-        return self.input
 
 
 class CompletionMessage:
     def __init__(self) -> None:
-        self.content = []
+        self.content: list = []
 
     def role(self, _role: Literal["user", "system", "developer"]) -> Self:
         self.content.append(
@@ -150,7 +71,6 @@ class CompletionMessage:
                 "text": _text,
             }
         )
-
         return self
 
     def image(self, image_url: str) -> Self:
@@ -161,7 +81,6 @@ class CompletionMessage:
                 "image_url": {"url": image_url},
             }
         )
-
         return self
 
     def images(self, image_urls: list[str]) -> Self:
@@ -203,7 +122,6 @@ class CompletionMessage:
                 },
             }
         )
-
         return self
 
     def file_url(self, file_url: str, filename: str) -> Self:
@@ -219,7 +137,6 @@ class CompletionMessage:
                 },
             }
         )
-
         return self
 
     def build(self) -> list[litellm.Message]:
@@ -237,7 +154,7 @@ async def openai(model: str, message: list[litellm.Message]) -> litellm.Message:
     return CompletionMessage().role(retmsg.role).text(retmsg.content).build()[0]
 
 
-async def get_reply(bot: Bot, message_id: int) -> Message:
+async def get_reply_message(bot: Bot, message_id: int) -> Message:
     return Message((await bot.get_msg(message_id=message_id)).get("raw_message"))
 
 
@@ -246,7 +163,7 @@ async def parse_message(bot: Bot, message: Message) -> CompletionMessage:
     _input = CompletionMessage()
 
     text = ""
-    filelist = []
+    filelist: list[str] = []
     imagenum = 1
     for seg in message:
         if seg.type == "reply":
@@ -254,8 +171,8 @@ async def parse_message(bot: Bot, message: Message) -> CompletionMessage:
             if message_id is None:
                 raise ValueError("回复消息缺少必要的字段")
 
-            message = await get_reply(bot, message_id)
-            _input = await parse_message(bot=bot, message=message)
+            replied = await get_reply_message(bot, int(message_id))
+            _input = await parse_message(bot=bot, message=replied)
         elif seg.type == "file":
             filename = seg.data.get("file")
             file_url = seg.data.get("url")
@@ -266,7 +183,7 @@ async def parse_message(bot: Bot, message: Message) -> CompletionMessage:
             extension = Path(filename).suffix
             file_url = f"{file_url}{filename}"
             if extension == ".zip":
-                return await (CompletionMessage().role("user")).zip(zip_url=file_url)
+                return await CompletionMessage().role("user").zip(zip_url=file_url)
             return (
                 CompletionMessage()
                 .role("user")
@@ -287,30 +204,29 @@ async def parse_message(bot: Bot, message: Message) -> CompletionMessage:
 async def handle_function(bot: Bot, event: MessageEvent) -> None:
     try:
         if event.raw_message == "":
-            return await llm.finish("请发送内容", at_sender=True)
+            await llm.finish("请发送内容", at_sender=True)
+            return
 
         llmmsg = (await parse_message(bot=bot, message=event.original_message)).build()
         logger.debug(f"[LLM]llmmsg: {llmmsg}")
 
         retmsg = await openai(model=f"openai/{config.model}", message=llmmsg)
-        logger.debug(f"[LLM]retmsg : {retmsg}")
+        logger.debug(f"[LLM]retmsg: {retmsg}")
 
         llmmsg.append(retmsg)
         chatdata = {"messages": llmmsg}
         b64str = base64.b64encode(json.dumps(chatdata).encode("utf-8")).decode("utf-8")
         b64strurl = urllib.parse.quote(b64str)
-        logger.debug(f"[LLM]b64str : {b64str}")
-        logger.debug(f"[LLM]b64strurl : {b64strurl}")
 
         await llm.finish(
             await app_getimage_cq(f"/chat?data={b64strurl}"),
             at_sender=True,
         )
     except FinishedException:
-        pass
-    except Exception as e:
-        return await llm.finish(
-            f"{e}",
-            at_sender=True,
-        )
-    return None
+        raise
+    except ValueError as e:
+        logger.warning(f"[LLM] input error: {e}")
+        await llm.finish(str(e), at_sender=True)
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"[LLM] unexpected error: {e}")
+        await llm.finish("处理失败，请稍后重试", at_sender=True)
