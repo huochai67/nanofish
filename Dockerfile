@@ -1,4 +1,4 @@
-FROM python:3.12 as requirements_stage
+FROM python:3.12 AS requirements_stage
 
 WORKDIR /wheel
 
@@ -19,21 +19,27 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-ENV TZ Asia/Shanghai
-ENV PYTHONPATH=/app
+ENV TZ=Asia/Shanghai \
+    PYTHONPATH=/app \
+    APP_MODULE=_main:app \
+    MAX_WORKERS=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY ./docker/gunicorn_conf.py ./docker/start.sh /
 RUN chmod +x /start.sh
-
-ENV APP_MODULE _main:app
-ENV MAX_WORKERS 1
 
 COPY --from=requirements_stage /tmp/bot.py /app
 COPY ./docker/_main.py /app
 COPY --from=requirements_stage /wheel /wheel
 
-RUN pip install --no-cache-dir gunicorn uvicorn[standard] nonebot2 \
-  && pip install --no-cache-dir --no-index --force-reinstall --find-links=/wheel -r /wheel/requirements.txt && rm -rf /wheel
+# Offline install from prebuilt wheels, then gunicorn (not in project deps) + Chromium
+RUN pip install --no-cache-dir --no-index --find-links=/wheel -r /wheel/requirements.txt \
+  && pip install --no-cache-dir gunicorn \
+  && rm -rf /wheel \
+  && playwright install --with-deps chromium \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY . /app/
 
 # Generate EH tag translation DB from committed JSON (o.db is gitignored)
