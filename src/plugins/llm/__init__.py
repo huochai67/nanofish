@@ -7,8 +7,9 @@ from typing import Literal, Self
 
 import litellm
 from nonebot import get_plugin_config, logger, on_command, require
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.exception import FinishedException
+from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
 
 require("acl")
@@ -16,19 +17,35 @@ require("app")
 require("utils")
 from ..acl import check_quota, consume_quota, require_command
 from ..app import app_chat_image_cq
-from ..utils import http_get
+from ..utils import get_first_image, get_plaintext, get_reply, http_get
 from .config import Config
+from .images import (
+    ImageAPIError,
+    image_edit,
+    image_generate,
+    image_to_cq,
+    images_to_cq,
+)
 
 __plugin_meta__ = PluginMetadata(
     name="llm",
-    description="多模态 LLM 对话，结果以截图回传",
-    usage="/llm <内容>，可附带图片/文件，或回复消息",
+    description="多模态 LLM 对话与 OpenAI 兼容生图/图生图",
+    usage=(
+        "/llm <内容>，可附带图片/文件，或回复消息；"
+        "/draw <描述> 文生图，附图或回复图片则为图生图"
+    ),
     config=Config,
 )
 
 config: Config = get_plugin_config(Config)
 
 llm = on_command("llm", permission=require_command("llm"))
+draw = on_command(
+    "draw",
+    priority=10,
+    block=True,
+    permission=require_command("draw"),
+)
 
 
 async def download_and_extract_zip(url: str) -> list[tuple[str, str]]:
@@ -231,3 +248,89 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
     except Exception as e:  # noqa: BLE001
         logger.exception(f"[LLM] unexpected error: {e}")
         await llm.finish("处理失败，请稍后重试", at_sender=True)
+
+
+async def _resolve_draw_prompt(bot: Bot, event: MessageEvent, arg: Message) -> str:
+    """Prefer command args; fall back to plaintext of the replied message."""
+    direct = get_plaintext(arg).strip()
+    if direct:
+        return direct
+
+    msg_reply = await get_reply(bot=bot, msg=event.original_message)
+    if not msg_reply:
+        return ""
+    raw = msg_reply.get("raw_message")
+    if not raw:
+        return ""
+    return get_plaintext(Message(raw)).strip()
+
+
+async def _resolve_draw_image_url(bot: Bot, event: MessageEvent) -> str | None:
+    """Image from current message, else from replied message."""
+    url = get_first_image(event.original_message)
+    if url:
+        return url
+    msg_reply = await get_reply(bot=bot, msg=event.original_message)
+    if not msg_reply:
+        return None
+    raw = msg_reply.get("raw_message")
+    if not raw:
+        return None
+    return get_first_image(Message(raw))
+
+
+def _reply_to_event(event: MessageEvent, content: Message | str) -> Message:
+    """Build a message that quotes the user's request."""
+    return MessageSegment.reply(event.message_id) + content
+
+
+@draw.handle()
+async def handle_draw(
+    bot: Bot,
+    event: MessageEvent,
+    arg: Message = CommandArg(),
+) -> None:
+    try:
+        quota = check_quota(event, "draw")
+        if not quota.allowed:
+            await draw.finish(quota.message or "额度不足", at_sender=True)
+            return
+
+        prompt = await _resolve_draw_prompt(bot, event, arg)
+        if not prompt:
+            await draw.finish(
+                "用法: /draw <描述>；附图或回复图片则为图生图",
+                at_sender=True,
+            )
+            return
+
+        image_url = await _resolve_draw_image_url(bot, event)
+        consume_quota(event, "draw")
+        # Image APIs are slow: ack first, then reply with the result.
+        await draw.send(_reply_to_event(event, "正在生成图片，请稍候…"))
+
+        if image_url:
+            logger.debug("[LLM/draw] edit prompt=%r image=%r", prompt, image_url)
+            b64_list = await image_edit(prompt, image_url)
+        else:
+            logger.debug("[LLM/draw] generate prompt=%r", prompt)
+            b64_list = await image_generate(prompt)
+
+        await draw.finish(_reply_to_event(event, images_to_cq(b64_list)))
+    except FinishedException:
+        raise
+    except ImageAPIError as e:
+        logger.warning("[LLM/draw] api error: %s", e.message)
+        await draw.finish(_reply_to_event(event, e.message))
+    except Exception as e:  # noqa: BLE001
+        logger.exception("[LLM/draw] unexpected error: %s", e)
+        await draw.finish(_reply_to_event(event, "生图失败，请稍后重试"))
+
+
+__all__ = [
+    "ImageAPIError",
+    "image_edit",
+    "image_generate",
+    "image_to_cq",
+    "images_to_cq",
+]

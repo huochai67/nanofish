@@ -19,6 +19,7 @@ config: Config = get_plugin_config(Config)
 
 _QUOTA_COMMANDS: dict[str, tuple[str, str]] = {
     "llm": ("acl_quota_llm_daily", "acl_cooldown_llm"),
+    "draw": ("acl_quota_draw_daily", "acl_cooldown_draw"),
     "genai": ("acl_quota_genai_daily", "acl_cooldown_genai"),
     "eh": ("acl_quota_eh_daily", "acl_cooldown_eh"),
 }
@@ -108,6 +109,7 @@ def perm_for_command(command: str) -> Role:
     mapping = {
         "jrrp": config.acl_perm_jrrp,
         "llm": config.acl_perm_llm,
+        "draw": config.acl_perm_draw,
         "genai": config.acl_perm_genai,
         "eh": config.acl_perm_eh,
         "health": config.acl_perm_health,

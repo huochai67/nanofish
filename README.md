@@ -15,7 +15,7 @@ docker/          # 容器启动脚本
 | 插件 | 命令 | 说明 |
 |------|------|------|
 | `acl` | `/auth` | 角色权限、群范围、日配额/冷却、运行时授权 |
-| `llm` | `/llm` | 多模态 LLM 对话，结果截图回传（默认 user + 日配额） |
+| `llm` | `/llm`、`/draw` | 多模态对话（截图回传）；OpenAI 兼容文生图/图生图（默认 user + 日配额） |
 | `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入） |
 | `ehsearch` | `/eh <书名>` 或回复后 `/eh` | E-Hentai 搜索，结果 HTML 截图回传（默认 admin + 配额） |
 | `genai_detect` | `/genai` | AI 生成图片检测（默认 user + 配额） |
@@ -30,7 +30,7 @@ docker/          # 容器启动脚本
 | 默认门槛 | 命令 |
 |----------|------|
 | guest | `/jrrp` |
-| user | `/llm`、`/genai` |
+| user | `/llm`、`/draw`、`/genai` |
 | admin | `/eh`、`/auth` 管理子命令 |
 | superuser | `/health` |
 
@@ -43,6 +43,7 @@ docker/          # 容器启动脚本
 配额（superuser 不限）：
 
 - `/llm` 默认 10 次/日、冷却 30s
+- `/draw` 默认 5 次/日、冷却 60s
 - `/genai` 默认 20 次/日、冷却 10s
 - `/eh` 默认 20 次/日、冷却 10s
 
@@ -107,7 +108,8 @@ docker compose up -d --build
 | `SUPERUSERS` | 超级用户 QQ 列表 |
 | `ACL_*` | 权限/群白名单/配额（见 `.env.example`） |
 | `APP_API_BASE` | 前端 base URL |
-| `MODEL` / `OPENAI_API_KEY` / `OPENAI_API_BASE` | LLM |
+| `MODEL` / `OPENAI_API_KEY` / `OPENAI_API_BASE` | LLM 对话 |
+| `IMAGE_MODEL` / `IMAGE_SIZE` / `IMAGE_RESPONSE_FORMAT` / `IMAGE_TIMEOUT` | `/draw` 生图（key/base 与对话共用） |
 | `SIGHTENGINE_API_USER` / `SIGHTENGINE_API_SECRET` | AI 图检测 |
 | `EH_IPB_*` / `EH_SK` / `EH_IGNEOUS` | ExHentai cookie |
 | `PROXY` | 可选 HTTP 代理 |
