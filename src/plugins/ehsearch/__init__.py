@@ -12,8 +12,6 @@ from nonebot.plugin import PluginMetadata
 
 from .config import Config
 from .ehapi import EhAPI, EhMetaData
-from .ehtag import TagTranslator
-from .sql import ensure_tag_db
 
 require("acl")
 require("app")
@@ -39,9 +37,6 @@ ehapi = EhAPI(
         "igneous": config.eh_igneous,
     },
 )
-# o.db is generated from db.text.json and is not committed to git
-ensure_tag_db(config.eh_db)
-ehtranslator = TagTranslator(db_path=config.eh_db)
 
 ehsearch = on_command("eh", priority=10, block=True, permission=require_command("eh"))
 
@@ -80,10 +75,10 @@ async def _thumb_to_data_url(url: str) -> str:
 
 
 async def build_eh_payload(query: str, results: list[EhMetaData]) -> dict[str, Any]:
+    """Build frontend payload; tags stay raw (namespace:tag), translated in Next.js."""
     thumbs = await asyncio.gather(*(_thumb_to_data_url(r.thumb) for r in results))
     items: list[dict[str, Any]] = []
     for r, thumb in zip(results, thumbs, strict=True):
-        tags = ehtranslator.trans_all(list(r.tags))
         items.append(
             {
                 "title": r.title,
@@ -94,7 +89,7 @@ async def build_eh_payload(query: str, results: list[EhMetaData]) -> dict[str, A
                 "posted": r.posted,
                 "filecount": r.filecount,
                 "rating": r.rating,
-                "tags": tags,
+                "tags": list(r.tags),
                 "url": r.url(),
             }
         )

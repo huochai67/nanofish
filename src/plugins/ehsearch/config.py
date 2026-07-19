@@ -1,4 +1,4 @@
-from typing import Annotated, Any
+from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, Field
 
@@ -10,7 +10,6 @@ class Config(BaseModel):
     """Plugin Config Here"""
 
     proxy: str | None = None
-    eh_db: str = Field(description="E-Hentai 标签翻译数据库路径")
     eh_ipb_member_id: _StrFromAny = Field(description="exhentai ipb_member_id cookie")
     eh_ipb_pass_hash: _StrFromAny = Field(description="exhentai ipb_pass_hash cookie")
     eh_sk: _StrFromAny = Field(default="", description="exhentai sk cookie")

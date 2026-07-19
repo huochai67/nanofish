@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
 
 import httpx
 from nonebot import get_bots, get_plugin, get_plugin_config, on_command, require
@@ -124,17 +123,40 @@ def check_llm() -> CheckResult:
     return CheckResult("LLM", Status.OK, f"已配置 model={model}")
 
 
-def check_eh_db() -> CheckResult:
-    cfg = _plugin_config("ehsearch")
-    if cfg is None:
-        return CheckResult("EH DB", Status.SKIP, "插件未加载")
-    eh_db = getattr(cfg, "eh_db", None)
-    if not eh_db:
-        return CheckResult("EH DB", Status.FAIL, "eh_db 未配置")
-    path = Path(str(eh_db))
-    if not path.is_file():
-        return CheckResult("EH DB", Status.FAIL, f"文件不存在 ({path})")
-    return CheckResult("EH DB", Status.OK, f"存在 ({path})")
+_MIN_EHTAG_DICT_BYTES = 1024
+
+
+async def check_eh_tags() -> CheckResult:
+    """Tag dict is served by the Next frontend (public/ehtag-dict.json)."""
+    base = app_config.app_api_base.rstrip("/")
+    if not base:
+        return CheckResult("EH 标签表", Status.FAIL, "APP_API_BASE 未配置")
+    url = f"{base}/ehtag-dict.json"
+    try:
+        async with httpx.AsyncClient(
+            timeout=config.health_http_timeout,
+            follow_redirects=True,
+        ) as http:
+            response = await http.get(url)
+        if not response.is_success:
+            return CheckResult(
+                "EH 标签表",
+                Status.FAIL,
+                f"HTTP {response.status_code} ({url})",
+            )
+        # lightweight sanity check without full parse cost on huge body
+        size = len(response.content)
+        if size < _MIN_EHTAG_DICT_BYTES:
+            return CheckResult("EH 标签表", Status.FAIL, f"响应过短 ({size} B)")
+        return CheckResult("EH 标签表", Status.OK, f"可用 ({size // 1024} KB)")
+    except httpx.TimeoutException:
+        return CheckResult("EH 标签表", Status.FAIL, f"超时 ({url})")
+    except httpx.HTTPError as e:
+        return CheckResult(
+            "EH 标签表",
+            Status.FAIL,
+            f"{type(e).__name__}: {e} ({url})",
+        )
 
 
 def check_sightengine() -> CheckResult:
@@ -170,7 +192,7 @@ async def handle_function() -> None:
         check_playwright(),
         await check_frontend(),
         check_llm(),
-        check_eh_db(),
+        await check_eh_tags(),
         check_sightengine(),
     ]
     await health.finish(format_results(results))

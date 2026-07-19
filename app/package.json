@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "ehtag": "node scripts/fetch-ehtag.mjs",
+    "ehtag:force": "node scripts/fetch-ehtag.mjs --force",
+    "dev": "node scripts/fetch-ehtag.mjs && next dev",
+    "build": "node scripts/fetch-ehtag.mjs && next build",
     "start": "next start",
     "lint": "eslint"
   },

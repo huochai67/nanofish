@@ -7,6 +7,7 @@ export interface EhGalleryItem {
   posted: string;
   filecount: string;
   rating: string;
+  /** Raw EH tags, e.g. "female:big breasts" (translated on the frontend) */
   tags: string[];
   url: string;
 }
@@ -30,12 +31,12 @@ export const MockEhData: EhResultData = {
       filecount: "24",
       rating: "4.50",
       tags: [
-        "language: 汉语",
-        "parody: 学园偶像大师",
-        "character: 藤田琴音",
-        "female: 巨乳",
-        "artist: しいたけたいし",
-        "group: しいたけ工房",
+        "language:chinese",
+        "parody:gakuen idolmaster",
+        "character:fujita kotone",
+        "female:big breasts",
+        "artist:shiitake taishi",
+        "group:shiitake koubou",
       ],
       url: "https://exhentai.org/g/1234567/abcdef01/",
     },
@@ -49,11 +50,11 @@ export const MockEhData: EhResultData = {
       filecount: "12",
       rating: "3.80",
       tags: [
-        "language: 英语",
-        "male: 眼镜",
-        "mixed: 群交",
-        "other: 全彩",
-        "reclass: 漫画",
+        "language:english",
+        "male:glasses",
+        "mixed:group",
+        "other:full color",
+        "reclass:manga",
       ],
       url: "https://exhentai.org/g/7654321/fedcba98/",
     },

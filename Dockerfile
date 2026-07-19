@@ -42,7 +42,4 @@ RUN pip install --no-cache-dir --no-index --find-links=/wheel -r /wheel/requirem
 
 COPY . /app/
 
-# Generate EH tag translation DB from committed JSON (o.db is gitignored)
-RUN python src/plugins/ehsearch/sql/ehsql.py
-
 CMD ["/start.sh"]

@@ -13,7 +13,8 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN pnpm build
+# Download EhTagTranslation map into public/ before next build
+RUN pnpm ehtag:force && pnpm exec next build
 
 FROM node:22-alpine AS runner
 WORKDIR /app

@@ -5,8 +5,13 @@ import { useEffect, useState } from "react";
 import { BookOpen, ImageOff, Star, User, FileText } from "lucide-react";
 import { Card } from "@heroui/react";
 import { QRCodeSVG } from "qrcode.react";
+import {
+  loadTagDict,
+  parseRawTag,
+  translateTag,
+  type TagDict,
+} from "./ehtag";
 import { EhGalleryItem, EhResultData, MockEhData } from "./types";
-
 declare global {
   interface Window {
     __EH_DATA__?: EhResultData;
@@ -67,20 +72,9 @@ const TAG_NS_STYLES: Record<string, string> = {
 
 const DEFAULT_TAG_STYLE = "bg-zinc-100 text-zinc-700 ring-zinc-200";
 
-function parseTag(raw: string): { ns: string; label: string } {
-  // backend: "namespace: 译文" or bare tag
-  const idx = raw.indexOf(":");
-  if (idx <= 0) {
-    return { ns: "", label: raw };
-  }
-  return {
-    ns: raw.slice(0, idx).trim().toLowerCase(),
-    label: raw.slice(idx + 1).trim() || raw,
-  };
-}
-
-function TagChip({ tag }: { tag: string }) {
-  const { ns, label } = parseTag(tag);
+function TagChip({ raw, dict }: { raw: string; dict: TagDict }) {
+  const { ns } = parseRawTag(raw);
+  const label = translateTag(raw, dict);
   const style = (ns && TAG_NS_STYLES[ns]) || DEFAULT_TAG_STYLE;
   return (
     <span
@@ -100,7 +94,7 @@ function TagChip({ tag }: { tag: string }) {
 /** Max tags shown before fold (screenshots stay compact by default). */
 const TAG_FOLD_LIMIT = 12;
 
-function TagList({ tags }: { tags: string[] }) {
+function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!tags.length) return null;
@@ -113,7 +107,7 @@ function TagList({ tags }: { tags: string[] }) {
   return (
     <div className="flex flex-wrap gap-1.5 pt-1">
       {visible.map((tag) => (
-        <TagChip key={tag} tag={tag} />
+        <TagChip key={tag} raw={tag} dict={dict} />
       ))}
       {needsFold && !expanded ? (
         <button
@@ -140,11 +134,25 @@ function TagList({ tags }: { tags: string[] }) {
 
 export default function EhResultsPage() {
   const [data, setData] = useState<EhResultData | null>(null);
+  const [dict, setDict] = useState<TagDict>({});
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setData(loadEhData());
-    setReady(true);
+    let cancelled = false;
+    (async () => {
+      const [ehData, tagDict] = await Promise.all([
+        Promise.resolve(loadEhData()),
+        loadTagDict(),
+      ]);
+      if (cancelled) return;
+      setData(ehData);
+      setDict(tagDict);
+      // Mark ready after dict + data so Playwright screenshots get translated tags
+      setReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!data) {
@@ -177,7 +185,12 @@ export default function EhResultsPage() {
           <p className="text-center text-zinc-500">无结果</p>
         ) : (
           data.results.map((item, idx) => (
-            <ResultCard key={`${item.url}-${idx}`} index={idx} item={item} />
+            <ResultCard
+              key={`${item.url}-${idx}`}
+              index={idx}
+              item={item}
+              dict={dict}
+            />
           ))
         )}
       </main>
@@ -185,7 +198,15 @@ export default function EhResultsPage() {
   );
 }
 
-function ResultCard({ index, item }: { index: number; item: EhGalleryItem }) {
+function ResultCard({
+  index,
+  item,
+  dict,
+}: {
+  index: number;
+  item: EhGalleryItem;
+  dict: TagDict;
+}) {
   const [imgFailed, setImgFailed] = useState(!item.thumb);
 
   return (
@@ -257,7 +278,9 @@ function ResultCard({ index, item }: { index: number; item: EhGalleryItem }) {
             <span>{formatPosted(item.posted)}</span>
           </div>
 
-          {item.tags?.length > 0 ? <TagList tags={item.tags} /> : null}
+          {item.tags?.length > 0 ? (
+            <TagList tags={item.tags} dict={dict} />
+          ) : null}
 
           {item.url ? (
             <div className="mt-auto rounded-md border border-zinc-100 bg-zinc-50 px-2.5 py-1.5">

@@ -109,15 +109,15 @@ docker compose up -d --build
 | `APP_API_BASE` | 前端 base URL |
 | `MODEL` / `OPENAI_API_KEY` / `OPENAI_API_BASE` | LLM |
 | `SIGHTENGINE_API_USER` / `SIGHTENGINE_API_SECRET` | AI 图检测 |
-| `EH_DB` / `EH_IPB_*` / `EH_SK` / `EH_IGNEOUS` | EH 搜索与标签库 |
+| `EH_IPB_*` / `EH_SK` / `EH_IGNEOUS` | ExHentai cookie |
 | `PROXY` | 可选 HTTP 代理 |
 
-标签翻译库 `EH_DB`（默认 `src/plugins/ehsearch/sql/o.db`）由 `db.text.json` **生成**，不入库。首次加载插件时会自动构建；也可手动：
+标签中文翻译在 **Next 前端**完成（[EhTagTranslation](https://github.com/EhTagTranslation/Database)）。构建/开发时会下载字典到 `app/public/ehtag-dict.json`（不入库）；Bot 只传原始 `namespace:tag`。
 
 ```bash
-python src/plugins/ehsearch/sql/ehsql.py
-# 或指定路径
-python src/plugins/ehsearch/sql/ehsql.py -j src/plugins/ehsearch/sql/db.text.json -o "$EH_DB"
+cd app
+pnpm ehtag        # 已存在则跳过
+pnpm ehtag:force  # 强制重新下载
 ```
 
 ## 开发

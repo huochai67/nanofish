@@ -7,5 +7,6 @@ README.md
 eslint.config.mjs
 tsconfig.tsbuildinfo
 package-lock.json
+public/ehtag-dict.json
 .env
 .env.*
