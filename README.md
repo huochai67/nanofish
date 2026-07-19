@@ -89,7 +89,14 @@ cp .env.example .env.prod
 docker compose up -d --build
 ```
 
-镜像已内置 Chromium（Playwright 截图）。无 `.env.prod` 时仍可构建启动，但需自行注入环境变量。
+`docker compose` 会同时启动：
+
+| 服务 | 说明 | 端口 |
+|------|------|------|
+| `nonebot` | 机器人 + Playwright Chromium | `PORT`（默认 8080） |
+| `frontend` | Next.js 截图页 | `FRONTEND_PORT`（默认 3000） |
+
+容器内 `APP_API_BASE` 固定为 `http://frontend:3000`（compose 覆盖 `.env.prod`）。无 `.env.prod` 时 compose 会报错，请先复制示例文件。
 
 ## 环境变量
 

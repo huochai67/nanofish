@@ -2,6 +2,18 @@ x-config-host: &config-host ${HOST:-0.0.0.0}
 x-config-port: &config-port ${PORT:-8080}
 
 services:
+  frontend:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    restart: always
+
   nonebot:
     build: .
     ports:
@@ -12,4 +24,8 @@ services:
       ENVIRONMENT: prod
       HOST: *config-host
       PORT: *config-port
+      # Reach Next.js on the compose network (overrides .env.prod if set)
+      APP_API_BASE: http://frontend:3000
+    depends_on:
+      - frontend
     restart: always
