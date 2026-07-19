@@ -24,9 +24,10 @@ function loadChatData(): { data: ChatData; error: string | null } {
     const dataParam = params.get("data");
     if (dataParam) {
       try {
-        const urldecode = decodeURIComponent(dataParam);
-        const decoded = atob(urldecode);
-        return { data: JSON.parse(decoded) as ChatData, error: null };
+        // Matches btoa(unescape(encodeURIComponent(json))) used when sharing
+        const binary = atob(decodeURIComponent(dataParam));
+        const json = decodeURIComponent(escape(binary));
+        return { data: JSON.parse(json) as ChatData, error: null };
       } catch (e) {
         console.error("Failed to parse URL data", e);
         return {

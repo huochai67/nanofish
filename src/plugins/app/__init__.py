@@ -77,16 +77,22 @@ class Client:
         finally:
             await page.close()
 
-    async def shoot_chat(self, chat_data: dict[str, Any]) -> str:
+    async def shoot_with_data(
+        self,
+        path: str,
+        global_name: str,
+        data: dict[str, Any],
+    ) -> str:
+        """Open a frontend page with window.<global_name> injected, then screenshot."""
         context = await self.get_context()
         page = await context.new_page()
         try:
             # inject before any page JS so React reads data on first mount
             await page.add_init_script(
-                f"window.__CHAT_DATA__ = {json.dumps(chat_data)};"
+                f"window.{global_name} = {json.dumps(data, ensure_ascii=False)};"
             )
             await page.goto(
-                f"{config.app_api_base}/chat",
+                f"{config.app_api_base}{path}",
                 wait_until="domcontentloaded",
                 timeout=config.app_page_timeout_ms,
             )
@@ -95,10 +101,28 @@ class Client:
                 timeout=config.app_page_timeout_ms,
             )
             await page.evaluate("() => document.fonts.ready")
+            # Hide Next.js dev tools / portals that may still paint in screenshots
+            await page.add_style_tag(
+                content=(
+                    "nextjs-portal,"
+                    "[data-nextjs-toast],"
+                    "[data-nextjs-dialog-overlay],"
+                    "[data-next-badge-root],"
+                    "#__next-build-watcher{"
+                    "display:none!important;visibility:hidden!important;"
+                    "}"
+                )
+            )
             image_bytes = await page.screenshot(type="jpeg", full_page=True)
             return base64.b64encode(image_bytes).decode("utf-8")
         finally:
             await page.close()
+
+    async def shoot_chat(self, chat_data: dict[str, Any]) -> str:
+        return await self.shoot_with_data("/chat", "__CHAT_DATA__", chat_data)
+
+    async def shoot_eh(self, eh_data: dict[str, Any]) -> str:
+        return await self.shoot_with_data("/eh", "__EH_DATA__", eh_data)
 
     async def close(self) -> None:
         async with self._async_lock:
@@ -183,4 +207,13 @@ async def app_chat_image_b64(chat_data: dict[str, Any]) -> str:
 
 async def app_chat_image_cq(chat_data: dict[str, Any]) -> Message:
     base64img = await app_chat_image_b64(chat_data)
+    return Message(f"[CQ:image,file=base64://{base64img}]")
+
+
+async def app_eh_image_b64(eh_data: dict[str, Any]) -> str:
+    return await client.shoot_eh(eh_data)
+
+
+async def app_eh_image_cq(eh_data: dict[str, Any]) -> Message:
+    base64img = await app_eh_image_b64(eh_data)
     return Message(f"[CQ:image,file=base64://{base64img}]")

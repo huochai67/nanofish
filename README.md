@@ -17,7 +17,7 @@ docker/          # 容器启动脚本
 | `acl` | `/auth` | 角色权限、群范围、日配额/冷却、运行时授权 |
 | `llm` | `/llm` | 多模态 LLM 对话，结果截图回传（默认 user + 日配额） |
 | `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入） |
-| `ehsearch` | `/eh` | E-Hentai 搜索（默认 admin + 配额） |
+| `ehsearch` | `/eh <书名>` 或回复后 `/eh` | E-Hentai 搜索，结果 HTML 截图回传（默认 admin + 配额） |
 | `genai_detect` | `/genai` | AI 生成图片检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |

@@ -1,24 +1,31 @@
+import asyncio
+import base64
+import mimetypes
+from typing import Any
+
 from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.exception import FinishedException
+from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
 
 from .config import Config
-from .ehapi import EhAPI
+from .ehapi import EhAPI, EhMetaData
 from .ehtag import TagTranslator
-from .pasters import upload_to_paste_rs
 from .sql import ensure_tag_db
 
 require("acl")
+require("app")
 require("utils")
 from ..acl import check_quota, consume_quota, require_command
-from ..utils import HttpRequestError, get_plaintext, get_reply
+from ..app import app_eh_image_cq
+from ..utils import HttpRequestError, get_plaintext, get_reply, http_get
 
 __plugin_meta__ = PluginMetadata(
     name="ehsearch",
     description="E-Hentai 搜索",
-    usage="回复一条消息后发送 /eh",
+    usage="/eh <书名>，或回复一条消息后发送 /eh（结果 HTML 截图回传）",
     config=Config,
 )
 
@@ -39,21 +46,75 @@ ehtranslator = TagTranslator(db_path=config.eh_db)
 ehsearch = on_command("eh", priority=10, block=True, permission=require_command("eh"))
 
 
+async def resolve_search_query(bot: Bot, event: MessageEvent, arg: Message) -> str:
+    """Prefer command args; fall back to plaintext of the replied message."""
+    direct = get_plaintext(arg).strip()
+    if direct:
+        return direct
+
+    msg_reply = await get_reply(bot=bot, msg=event.original_message)
+    if not msg_reply:
+        return ""
+
+    raw = msg_reply.get("raw_message")
+    if not raw:
+        return ""
+    return get_plaintext(Message(raw)).strip()
+
+
+async def _thumb_to_data_url(url: str) -> str:
+    """Fetch thumbnail via bot proxy; return data URL or empty string on failure."""
+    if not url:
+        return ""
+    try:
+        resp = await http_get(url, proxy=config.proxy, timeout=15.0)
+        content_type = resp.headers.get("content-type", "").split(";")[0].strip()
+        if not content_type or not content_type.startswith("image/"):
+            guessed, _ = mimetypes.guess_type(url)
+            content_type = guessed or "image/jpeg"
+        b64 = base64.b64encode(resp.content).decode("ascii")
+        return f"data:{content_type};base64,{b64}"
+    except Exception as e:  # noqa: BLE001
+        logger.debug(f"eh thumb fetch failed: {url!r}: {e}")
+        return ""
+
+
+async def build_eh_payload(query: str, results: list[EhMetaData]) -> dict[str, Any]:
+    thumbs = await asyncio.gather(*(_thumb_to_data_url(r.thumb) for r in results))
+    items: list[dict[str, Any]] = []
+    for r, thumb in zip(results, thumbs, strict=True):
+        tags = ehtranslator.trans_all(list(r.tags))
+        items.append(
+            {
+                "title": r.title,
+                "title_jpn": r.title_jpn,
+                "category": r.category,
+                "thumb": thumb,
+                "uploader": r.uploader,
+                "posted": r.posted,
+                "filecount": r.filecount,
+                "rating": r.rating,
+                "tags": tags,
+                "url": r.url(),
+            }
+        )
+    return {"query": query, "results": items}
+
+
 @ehsearch.handle()
-async def handle_function(bot: Bot, event: MessageEvent) -> None:
+async def handle_function(
+    bot: Bot,
+    event: MessageEvent,
+    arg: Message = CommandArg(),
+) -> None:
     quota = check_quota(event, "eh")
     if not quota.allowed:
         await ehsearch.finish(quota.message or "额度不足")
         return
 
-    msg_reply = await get_reply(bot=bot, msg=event.original_message)
-    if not msg_reply:
-        await ehsearch.finish("获取被回复消息失败")
-        return
-
-    search = get_plaintext(Message(msg_reply.get("raw_message")))
-    if not search.strip():
-        await ehsearch.finish("被回复消息中没有可搜索的文本")
+    search = await resolve_search_query(bot, event, arg)
+    if not search:
+        await ehsearch.finish("用法: /eh <书名>，或回复一条含书名的消息后发送 /eh")
         return
 
     logger.info(f"searching {search}")
@@ -66,18 +127,9 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
             await ehsearch.finish("未找到相关结果")
             return
 
-        lines: list[str] = []
-        for i, r in enumerate(result):
-            r.tags = ehtranslator.trans_all(r.tags)
-            lines.append(f"[{i}][{r.category}]{r.title}")
-            lines.append(
-                f"\t Uploader: {r.uploader}\t time: {r.posted}\t pages: {r.filecount}"
-            )
-            lines.append(f"\t thumb: {r.thumb}\t url:{r.url()}")
-            lines.append(f"\t tags: {r.tags}\n")
-
-        output = "\n".join(lines)
-        url = await upload_to_paste_rs(text_content=output, proxy=config.proxy)
+        payload = await build_eh_payload(search, result)
+        image = await app_eh_image_cq(payload)
+        await ehsearch.finish(image)
     except FinishedException:
         raise
     except HttpRequestError as e:
@@ -88,5 +140,3 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         logger.exception("ehsearch unexpected error")
         await ehsearch.finish(f"处理失败: {type(e).__name__}: {e}")
         return
-
-    await ehsearch.finish(f"找到 {len(result)} 条结果: {url}")

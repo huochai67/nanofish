@@ -1,4 +1,9 @@
-from pydantic import BaseModel, Field
+from typing import Annotated, Any
+
+from pydantic import BaseModel, BeforeValidator, Field
+
+# .env numeric-looking values (e.g. ipb_member_id) parse as int without quotes
+_StrFromAny = Annotated[str, BeforeValidator(lambda v: str(v) if v is not None else v)]
 
 
 class Config(BaseModel):
@@ -6,7 +11,7 @@ class Config(BaseModel):
 
     proxy: str | None = None
     eh_db: str = Field(description="E-Hentai 标签翻译数据库路径")
-    eh_ipb_member_id: str = Field(description="exhentai ipb_member_id cookie")
-    eh_ipb_pass_hash: str = Field(description="exhentai ipb_pass_hash cookie")
-    eh_sk: str = Field(description="exhentai sk cookie")
-    eh_igneous: str = Field(description="exhentai igneous cookie")
+    eh_ipb_member_id: _StrFromAny = Field(description="exhentai ipb_member_id cookie")
+    eh_ipb_pass_hash: _StrFromAny = Field(description="exhentai ipb_pass_hash cookie")
+    eh_sk: _StrFromAny = Field(default="", description="exhentai sk cookie")
+    eh_igneous: _StrFromAny = Field(description="exhentai igneous cookie")
