@@ -4,12 +4,13 @@ from pathlib import Path
 
 import httpx
 from nonebot import get_bots, get_plugin, get_plugin_config, on_command, require
-from nonebot.permission import SUPERUSER
 from nonebot.plugin import PluginMetadata
 
 from .config import Config
 
+require("acl")
 require("app")
+from ..acl import require_command
 from ..app import client as app_client
 from ..app import config as app_config
 
@@ -22,7 +23,12 @@ __plugin_meta__ = PluginMetadata(
 
 config: Config = get_plugin_config(Config)
 
-health = on_command("health", priority=10, block=True, permission=SUPERUSER)
+health = on_command(
+    "health",
+    priority=10,
+    block=True,
+    permission=require_command("health"),
+)
 
 
 class Status(StrEnum):

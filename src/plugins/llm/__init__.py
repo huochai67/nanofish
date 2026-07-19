@@ -11,8 +11,10 @@ from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
 
+require("acl")
 require("app")
 require("utils")
+from ..acl import check_quota, consume_quota, require_command
 from ..app import app_chat_image_cq
 from ..utils import http_get
 from .config import Config
@@ -26,7 +28,7 @@ __plugin_meta__ = PluginMetadata(
 
 config: Config = get_plugin_config(Config)
 
-llm = on_command("llm")
+llm = on_command("llm", permission=require_command("llm"))
 
 
 async def download_and_extract_zip(url: str) -> list[tuple[str, str]]:
@@ -200,6 +202,11 @@ async def parse_message(bot: Bot, message: Message) -> CompletionMessage:
 @llm.handle()
 async def handle_function(bot: Bot, event: MessageEvent) -> None:
     try:
+        quota = check_quota(event, "llm")
+        if not quota.allowed:
+            await llm.finish(quota.message or "额度不足", at_sender=True)
+            return
+
         if event.raw_message == "":
             await llm.finish("请发送内容", at_sender=True)
             return
@@ -207,6 +214,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         llmmsg = (await parse_message(bot=bot, message=event.original_message)).build()
         logger.debug(f"[LLM]llmmsg: {llmmsg}")
 
+        consume_quota(event, "llm")
         retmsg = await openai(model=f"openai/{config.model}", message=llmmsg)
         logger.debug(f"[LLM]retmsg: {retmsg}")
 

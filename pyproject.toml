@@ -109,6 +109,8 @@ keep-runtime-typing = true
 "src/plugins/ehsearch/sql/**" = ["ALL"]
 "src/plugins/ehsearch/ehtag.py" = ["ANN002", "ANN003", "ANN204", "ARG004", "E501"]
 "src/plugins/ehsearch/pasters.py" = ["E501", "TRY300"]
+# nonebot DI annotations must stay at runtime; auth handlers are branchy by design
+"src/plugins/acl/**" = ["TC001", "TC002", "C901", "PLR0911", "PLR0912", "PLR0915"]
 
 [tool.pyright]
 # For Pylance/Pyright configurations, see https://microsoft.github.io/pyright/#/configuration.

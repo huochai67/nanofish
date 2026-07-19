@@ -1,11 +1,14 @@
 import datetime
 import random
 
-from nonebot import get_plugin_config, on_command
+from nonebot import get_plugin_config, on_command, require
 from nonebot.adapters.onebot.v11 import MessageEvent
 from nonebot.plugin import PluginMetadata
 
 from .config import Config
+
+require("acl")
+from ..acl import require_command
 
 __plugin_meta__ = PluginMetadata(
     name="jrrp",
@@ -16,7 +19,7 @@ __plugin_meta__ = PluginMetadata(
 
 config = get_plugin_config(Config)
 
-jrrp = on_command("jrrp")
+jrrp = on_command("jrrp", permission=require_command("jrrp"))
 
 
 @jrrp.handle()
