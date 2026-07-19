@@ -1,7 +1,5 @@
 import base64
-import json
 import mimetypes
-import urllib.parse
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -15,7 +13,7 @@ from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
 
 require("app")
-from ..app import app_getimage_cq
+from ..app import app_chat_image_cq
 from .config import Config
 
 __plugin_meta__ = PluginMetadata(
@@ -214,12 +212,8 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         logger.debug(f"[LLM]retmsg: {retmsg}")
 
         llmmsg.append(retmsg)
-        chatdata = {"messages": llmmsg}
-        b64str = base64.b64encode(json.dumps(chatdata).encode("utf-8")).decode("utf-8")
-        b64strurl = urllib.parse.quote(b64str)
-
         await llm.finish(
-            await app_getimage_cq(f"/chat?data={b64strurl}"),
+            await app_chat_image_cq({"messages": llmmsg}),
             at_sender=True,
         )
     except FinishedException:

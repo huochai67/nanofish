@@ -8,37 +8,52 @@ import { User, MessageSquare, Share2, File } from "lucide-react";
 import { Button, Card, Avatar, Alert } from "@heroui/react";
 import { ChatData, ChatMessage, MockChatData } from "./types";
 
+declare global {
+  interface Window {
+    __CHAT_DATA__?: ChatData;
+  }
+}
+
+function loadChatData(): { data: ChatData; error: string | null } {
+  if (typeof window !== "undefined" && window.__CHAT_DATA__) {
+    return { data: window.__CHAT_DATA__, error: null };
+  }
+
+  if (typeof window !== "undefined") {
+    const params = new URLSearchParams(window.location.search);
+    const dataParam = params.get("data");
+    if (dataParam) {
+      try {
+        const urldecode = decodeURIComponent(dataParam);
+        const decoded = atob(urldecode);
+        return { data: JSON.parse(decoded) as ChatData, error: null };
+      } catch (e) {
+        console.error("Failed to parse URL data", e);
+        return {
+          data: MockChatData,
+          error: "Invalid data format in URL. Showing default conversation.",
+        };
+      }
+    }
+  }
+
+  return { data: MockChatData, error: null };
+}
+
 export default function App() {
-  const [chatData, setChatData] = useState<ChatData>(MockChatData);
+  const [chatData, setChatData] = useState<ChatData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const readChatData = async () => {
-      try {
-        const params = new URLSearchParams(window.location.search);
-        const dataParam = params.get("data");
-
-        if (dataParam) {
-          try {
-            const urldecode = decodeURIComponent(dataParam);
-            const decoded = atob(urldecode);
-            const parsed = JSON.parse(decoded) as ChatData;
-            setChatData(parsed);
-          } catch (e) {
-            console.error("Failed to parse URL data", e);
-            setError(
-              "Invalid data format in URL. Showing default conversation.",
-            );
-          }
-        }
-      } catch (error) {
-        alert("Failed to load runtime : " + error);
-      }
-    };
-    readChatData();
+    const { data, error: loadError } = loadChatData();
+    setChatData(data);
+    setError(loadError);
+    setReady(true);
   }, []);
 
   const generateShareUrl = () => {
+    if (!chatData) return window.location.href;
     const json = JSON.stringify(chatData);
     const base64 = btoa(unescape(encodeURIComponent(json)));
     const url = new URL(window.location.href);
@@ -52,9 +67,12 @@ export default function App() {
     alert("Share URL copied to clipboard!");
   };
 
+  if (!chatData) {
+    return <div className="min-h-screen" data-ready="false" />;
+  }
+
   return (
-    <div className="min-h-screen">
-      {/* Header */}
+    <div className="min-h-screen" data-ready={ready ? "true" : "false"}>
       {chatData.title && (
         <header className="border-b px-6 py-4">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
@@ -78,7 +96,6 @@ export default function App() {
         </header>
       )}
 
-      {/* Main Content */}
       <main className="max-w-3xl mx-auto p-6 pb-24">
         {error && (
           <Alert status="danger">
@@ -95,19 +112,6 @@ export default function App() {
           ))}
         </div>
       </main>
-
-      {/* Footer / Info
-      <footer className="fixed bottom-0 left-0 right-0 p-6 pointer-events-none">
-        <div className="max-w-3xl mx-auto flex justify-center">
-          <Card className="pointer-events-auto">
-            <CardContent className="px-4 py-2">
-              <p className="text-[10px] uppercase tracking-widest font-bold text-stone-400">
-                End of Conversation
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </footer> */}
     </div>
   );
 }
@@ -115,25 +119,20 @@ export default function App() {
 function MessageRow({ message }: { message: ChatMessage }) {
   const isLeft = message.role === "assistant";
 
-  const color = isLeft ? "bg-slate-800" : "bg-blue-500";
-
   return (
     <div
       className={`flex w-full gap-4 ${
         isLeft ? "flex-row" : "flex-row-reverse"
       }`}
     >
-      {/* Avatar */}
       <div className="shrink-0">
         <Avatar size="lg">
-          {/* <Avatar.Image src={participant.avatar} /> */}
           <Avatar.Fallback>
             <User size={20} />
           </Avatar.Fallback>
         </Avatar>
       </div>
 
-      {/* Message Bubble */}
       <div
         className={`flex flex-col max-w-[80%] ${
           isLeft ? "items-start" : "items-end"
@@ -170,7 +169,6 @@ function MessageRow({ message }: { message: ChatMessage }) {
                 <img
                   className="max-w-64 rounded-sm"
                   alt="image"
-                  // loading="lazy"
                   src={content.image_url?.url}
                 />
               )}

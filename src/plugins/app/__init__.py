@@ -1,13 +1,14 @@
 import asyncio
 import atexit
 import base64
+import json
 import threading
 from typing import Any, ClassVar, Self
 
-from nonebot import get_plugin_config, logger
+from nonebot import get_driver, get_plugin_config, logger
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.plugin import PluginMetadata
-from playwright.async_api import Browser, Playwright, async_playwright
+from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
 from .config import Config
 
@@ -40,30 +41,32 @@ class Client:
         self._async_lock = asyncio.Lock()
         self.playwright: Playwright | None = None
         self.browser: Browser | None = None
+        self.context: BrowserContext | None = None
 
-    async def get_browser(self) -> Browser:
+    async def get_context(self) -> BrowserContext:
         async with self._async_lock:
-            if self.browser and self.browser.is_connected():
-                return self.browser
+            if self.browser and self.browser.is_connected() and self.context:
+                return self.context
 
             await self._close_unlocked()
             playwright = await async_playwright().start()
             browser = await playwright.chromium.launch()
-            self.playwright = playwright
-            self.browser = browser
-            logger.info("Playwright browser launched")
-            return browser
-
-    async def shoot(self, url: str) -> str:
-        browser = await self.get_browser()
-        page = await browser.new_page()
-        try:
-            await page.set_viewport_size(
-                {
+            context = await browser.new_context(
+                viewport={
                     "width": config.app_viewport_width,
                     "height": config.app_viewport_height,
-                }
+                },
             )
+            self.playwright = playwright
+            self.browser = browser
+            self.context = context
+            logger.info("Playwright browser launched")
+            return context
+
+    async def shoot(self, url: str) -> str:
+        context = await self.get_context()
+        page = await context.new_page()
+        try:
             await page.goto(
                 url,
                 wait_until="networkidle",
@@ -74,11 +77,41 @@ class Client:
         finally:
             await page.close()
 
+    async def shoot_chat(self, chat_data: dict[str, Any]) -> str:
+        context = await self.get_context()
+        page = await context.new_page()
+        try:
+            # inject before any page JS so React reads data on first mount
+            await page.add_init_script(
+                f"window.__CHAT_DATA__ = {json.dumps(chat_data)};"
+            )
+            await page.goto(
+                f"{config.app_api_base}/chat",
+                wait_until="domcontentloaded",
+                timeout=config.app_page_timeout_ms,
+            )
+            await page.wait_for_selector(
+                "[data-ready='true']",
+                timeout=config.app_page_timeout_ms,
+            )
+            await page.evaluate("() => document.fonts.ready")
+            image_bytes = await page.screenshot(type="jpeg", full_page=True)
+            return base64.b64encode(image_bytes).decode("utf-8")
+        finally:
+            await page.close()
+
     async def close(self) -> None:
         async with self._async_lock:
             await self._close_unlocked()
 
     async def _close_unlocked(self) -> None:
+        if self.context:
+            try:
+                await self.context.close()
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"关闭 browser context 失败: {e}")
+            self.context = None
+
         if self.browser:
             try:
                 await self.browser.close()
@@ -114,6 +147,21 @@ def _sync_close_client() -> None:
 
 atexit.register(_sync_close_client)
 
+driver = get_driver()
+
+
+@driver.on_startup
+async def _warm_browser() -> None:
+    try:
+        await client.get_context()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"预热 Playwright 失败: {e}")
+
+
+@driver.on_shutdown
+async def _shutdown_browser() -> None:
+    await client.close()
+
 
 async def app_getimage_b64(api: str) -> str:
     return await client.shoot(f"{config.app_api_base}{api}")
@@ -126,4 +174,13 @@ async def app_getimage_uri(api: str) -> str:
 
 async def app_getimage_cq(api: str) -> Message:
     base64img = await app_getimage_b64(api=api)
+    return Message(f"[CQ:image,file=base64://{base64img}]")
+
+
+async def app_chat_image_b64(chat_data: dict[str, Any]) -> str:
+    return await client.shoot_chat(chat_data)
+
+
+async def app_chat_image_cq(chat_data: dict[str, Any]) -> Message:
+    base64img = await app_chat_image_b64(chat_data)
     return Message(f"[CQ:image,file=base64://{base64img}]")

@@ -15,7 +15,7 @@ docker/          # 容器启动脚本
 | 插件 | 命令 | 说明 |
 |------|------|------|
 | `llm` | `/llm` | 多模态 LLM 对话，结果截图回传 |
-| `app` | — | Playwright 截图服务 |
+| `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入） |
 | `ehsearch` | `/eh` | E-Hentai 搜索（仅超级用户） |
 | `genai_detect` | `/genai` | AI 生成图片检测（仅超级用户） |
 | `jrrp` | `/jrrp` | 今日祝福/人品 |
@@ -50,9 +50,11 @@ pnpm dev   # 默认 http://localhost:3000
 
 ```bash
 cp .env.example .env.prod
-# 编辑 .env.prod
+# 编辑 .env.prod（含 DRIVER、API Key 等）
 docker compose up -d --build
 ```
+
+镜像已内置 Chromium（Playwright 截图）。无 `.env.prod` 时仍可构建启动，但需自行注入环境变量。
 
 ## 环境变量
 
