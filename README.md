@@ -19,6 +19,7 @@ docker/          # 容器启动脚本
 | `ehsearch` | `/eh` | E-Hentai 搜索（仅超级用户） |
 | `genai_detect` | `/genai` | AI 生成图片检测（仅超级用户） |
 | `jrrp` | `/jrrp` | 今日祝福/人品 |
+| `health` | `/health` | 深度健康检查（Bot / Playwright / 前端 / 配置，仅超级用户） |
 | `utils` | — | 共享消息解析工具 |
 
 ## 快速开始
