@@ -50,7 +50,12 @@ def _response_body(response: Any) -> str:
 
 
 def _request_body(request: Any) -> Any:
-    return request.content if hasattr(request, "content") else request.body
+    try:
+        return request.content
+    except AttributeError:
+        return request.body
+    except RuntimeError:
+        return "<streaming body>"
 
 
 def _response_reason(response: Any) -> str:
@@ -82,8 +87,9 @@ def log_http_trace(name: str, response: Any) -> None:
 class HttpRequestError(Exception):
     """HTTP 请求失败，message 可直接展示给用户。"""
 
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str, *, status: int | None = None) -> None:
         self.message = message
+        self.status = status
         super().__init__(message)
 
 
@@ -92,9 +98,8 @@ def _config() -> Config:
 
 
 def get_http_proxy() -> str | None:
-    """Return the configured proxy, preferring the documented ``PROXY`` setting."""
-    cfg = _config()
-    return cfg.proxy or cfg.http_proxy
+    """Return the shared proxy configured through any supported environment name."""
+    return _config().proxy
 
 
 def configure_proxy_environment() -> None:

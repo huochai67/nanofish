@@ -1,5 +1,8 @@
 import asyncio
+import base64
 import mimetypes
+import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -74,6 +77,12 @@ def _image_filename(content_type: str) -> str:
     return f"image{extension}"
 
 
+def _soutubot_api_key(m: int, user_agent: str) -> str:
+    timestamp = int(time.time())
+    value = timestamp**2 + len(user_agent) ** 2 + m
+    return base64.b64encode(str(value).encode()).decode().rstrip("=")[::-1]
+
+
 async def _resolve_image_url(bot: Bot, event: MessageEvent) -> str | None:
     direct = get_first_image(event.original_message)
     if direct:
@@ -109,6 +118,33 @@ class ImageSearchClient:
             proxy=config.proxy,
             debug_name="Soutubot",
         )
+        self._soutubot_m: int | None = None
+
+    async def _refresh_soutubot_cache(self) -> None:
+        # The homepage provides both Cloudflare cookies and the current key salt.
+        response = await self.soutubot.get(
+            "https://soutubot.moe/",
+            timeout=config.imgsearch_timeout,
+        )
+        match = re.search(r"m:\s*(-?\d+),", response.text)
+        if match is None or int(match.group(1)) <= 0:
+            raise HttpRequestError("Soutubot 初始化失败")
+        self._soutubot_m = int(match.group(1))
+
+    async def _soutubot_headers(self) -> dict[str, str]:
+        if self._soutubot_m is None:
+            await self._refresh_soutubot_cache()
+        user_agent = self.soutubot.user_agent
+        if user_agent is None or self._soutubot_m is None:
+            raise HttpRequestError("Soutubot 初始化失败")
+        return {
+            "accept": "application/json, text/plain, */*",
+            "dnt": "1",
+            "origin": "https://soutubot.moe",
+            "referer": "https://soutubot.moe/",
+            "x-api-key": _soutubot_api_key(self._soutubot_m, user_agent),
+            "x-requested-with": "XMLHttpRequest",
+        }
 
     async def search_saucenao(
         self,
@@ -174,9 +210,6 @@ class ImageSearchClient:
         image: bytes,
         content_type: str,
     ) -> list[SearchResult]:
-        api_key = config.imgsearch_soutubot_api_key.strip()
-        if not api_key:
-            return []
         logger.info(
             "[Soutubot] sending search: key_configured=true proxy_configured={} "
             "image_bytes={} content_type={}",
@@ -184,19 +217,25 @@ class ImageSearchClient:
             len(image),
             content_type,
         )
-        response = await self.soutubot.post(
-            "https://soutubot.moe/api/search",
-            data={"factor": str(config.imgsearch_soutubot_factor)},
-            files={"file": (_image_filename(content_type), image, content_type)},
-            headers={
-                "accept": "application/json, text/plain, */*",
-                "origin": "https://soutubot.moe",
-                "referer": "https://soutubot.moe/",
-                "x-api-key": api_key,
-                "x-requested-with": "XMLHttpRequest",
-            },
-            timeout=config.imgsearch_timeout,
-        )
+        try:
+            response = await self.soutubot.post(
+                "https://soutubot.moe/api/search",
+                data={"factor": str(config.imgsearch_soutubot_factor)},
+                files={"file": (_image_filename(content_type), image, content_type)},
+                headers=await self._soutubot_headers(),
+                timeout=config.imgsearch_timeout,
+            )
+        except HttpRequestError as e:
+            if e.status not in {401, 403}:
+                raise
+            self._soutubot_m = None
+            response = await self.soutubot.post(
+                "https://soutubot.moe/api/search",
+                data={"factor": str(config.imgsearch_soutubot_factor)},
+                files={"file": (_image_filename(content_type), image, content_type)},
+                headers=await self._soutubot_headers(),
+                timeout=config.imgsearch_timeout,
+            )
         try:
             payload = response.json()
         except ValueError as e:
@@ -237,9 +276,8 @@ class ImageSearchClient:
     ) -> tuple[list[SearchResult], list[str]]:
         tasks = [self.search_saucenao(image, content_type)]
         source_names = ["SauceNAO"]
-        if config.imgsearch_soutubot_api_key:
-            tasks.append(self.search_soutubot(image, content_type))
-            source_names.append("Soutubot")
+        tasks.append(self.search_soutubot(image, content_type))
+        source_names.append("Soutubot")
         responses = await asyncio.gather(*tasks, return_exceptions=True)
 
         results: list[SearchResult] = []

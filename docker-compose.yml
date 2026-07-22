@@ -28,4 +28,12 @@ services:
       APP_API_BASE: http://frontend:3000
     depends_on:
       - frontend
+      - flaresolverr
+    restart: always
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    environment:
+      LOG_LEVEL: info
+      TZ: Asia/Shanghai
     restart: always

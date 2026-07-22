@@ -9,5 +9,4 @@ class Config(BaseModel):
     imgsearch_max_file_size: int = Field(default=8 * 1024 * 1024, gt=0)
     imgsearch_result_limit: int = Field(default=5, ge=1, le=10)
     imgsearch_saucenao_api_key: str = ""
-    imgsearch_soutubot_api_key: str = ""
     imgsearch_soutubot_factor: float = Field(default=1.2, gt=0)

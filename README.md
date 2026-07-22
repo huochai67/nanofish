@@ -100,8 +100,10 @@ docker compose up -d --build
 |------|------|------|
 | `nonebot` | 机器人 + Playwright Chromium + FFmpeg | `PORT`（默认 8080） |
 | `frontend` | Next.js 截图页 | `FRONTEND_PORT`（默认 3000） |
+| `flaresolverr` | Cloudflare 验证 cookie 获取服务 | 仅 Compose 内部网络 |
 
 容器内 `APP_API_BASE` 固定为 `http://frontend:3000`（compose 覆盖 `.env.prod`）。无 `.env.prod` 时 compose 会报错，请先复制示例文件。
+`flaresolverr` 不开放宿主机端口；非 Docker 部署时，将 `FLARESOLVERR_URL` 指向自行运行的内部服务。
 
 ## 环境变量
 
@@ -117,8 +119,9 @@ docker compose up -d --build
 | `IMAGE_MODEL` / `IMAGE_SIZE` / `IMAGE_RESPONSE_FORMAT` / `IMAGE_TIMEOUT` | `/draw` 生图（key/base 与对话共用） |
 | `SIGHTENGINE_API_USER` / `SIGHTENGINE_API_SECRET` | AI 图检测 |
 | `EH_IPB_*` / `EH_SK` / `EH_IGNEOUS` | ExHentai cookie |
-| `IMGSEARCH_*` | 反向搜图的上游参数；Soutubot 仅使用自有授权 API key |
-| `PROXY` | 可选 HTTP 代理，应用于全部后端外部请求（`HTTP_PROXY` 兼容旧配置） |
+| `IMGSEARCH_*` | 反向搜图的上游参数 |
+| `PROXY` | 可选代理，应用于全部后端外部请求（兼容读取 `HTTP_PROXY` / `HTTPS_PROXY`） |
+| `FLARESOLVERR_URL` | FlareSolverr API 地址；Compose 默认 `http://flaresolverr:8191/v1` |
 
 标签中文翻译在 **Next 前端**完成（[EhTagTranslation](https://github.com/EhTagTranslation/Database)）。构建/开发时会下载字典到 `app/public/ehtag-dict.json`（不入库）；Bot 只传原始 `namespace:tag`。
 
