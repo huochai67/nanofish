@@ -9,9 +9,11 @@ from .config import Config
 
 require("acl")
 require("app")
+require("utils")
 from ..acl import require_command
 from ..app import client as app_client
 from ..app import config as app_config
+from ..utils import get_globalconfig, log_http_trace
 
 __plugin_meta__ = PluginMetadata(
     name="health",
@@ -81,8 +83,11 @@ async def check_frontend() -> CheckResult:
         async with httpx.AsyncClient(
             timeout=config.health_http_timeout,
             follow_redirects=True,
+            trust_env=False,
         ) as http:
             response = await http.get(base)
+        if get_globalconfig().http_trace:
+            log_http_trace("health", response)
         return CheckResult(
             "前端",
             Status.OK if response.is_success else Status.FAIL,
@@ -136,8 +141,11 @@ async def check_eh_tags() -> CheckResult:
         async with httpx.AsyncClient(
             timeout=config.health_http_timeout,
             follow_redirects=True,
+            trust_env=False,
         ) as http:
             response = await http.get(url)
+        if get_globalconfig().http_trace:
+            log_http_trace("health", response)
         if not response.is_success:
             return CheckResult(
                 "EH 标签表",

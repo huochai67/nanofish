@@ -1,13 +1,13 @@
-import os
 import json
 import multiprocessing
+import os
 
 host = os.getenv("HOST", "0.0.0.0")
 port = os.getenv("PORT", "8080")
 bind_env = os.getenv("BIND", None)
 use_bind = bind_env or f"{host}:{port}"
 
-use_loglevel = os.getenv("LOG_LEVEL", "info")
+use_loglevel = os.getenv("LOG_LEVEL", "INFO").upper()
 accesslog_var = os.getenv("ACCESS_LOG", "-")
 use_accesslog = accesslog_var or None
 errorlog_var = os.getenv("ERROR_LOG", "-")
@@ -32,7 +32,7 @@ timeout_str = os.getenv("TIMEOUT", "120")
 keepalive_str = os.getenv("KEEP_ALIVE", "5")
 
 # Gunicorn config variables
-loglevel = use_loglevel
+loglevel = use_loglevel.lower()
 workers = web_concurrency
 bind = use_bind
 errorlog = use_errorlog
@@ -45,17 +45,17 @@ keyfile = os.getenv("KEYFILE", None)
 certfile = os.getenv("CERTFILE", None)
 
 logconfig_dict = {
-    "root": {"level": "INFO", "handlers": ["default"]},
+    "root": {"level": use_loglevel, "handlers": ["default"]},
     "handlers": {"default": {"class": "nonebot.log.LoguruHandler"}},
     "loggers": {
         "gunicorn.error": {
-            "level": "INFO",
+            "level": use_loglevel,
             "handlers": ["default"],
             "propagate": True,
             "qualname": "gunicorn.error",
         },
         "gunicorn.access": {
-            "level": "INFO",
+            "level": use_loglevel,
             "handlers": ["default"],
             "propagate": True,
             "qualname": "gunicorn.access",

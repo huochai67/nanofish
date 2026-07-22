@@ -5,7 +5,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Literal, Self
 
-import litellm
 from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.exception import FinishedException
@@ -15,6 +14,7 @@ from nonebot.plugin import PluginMetadata
 require("acl")
 require("app")
 require("utils")
+import litellm  # noqa: I001  # import after proxy environment is configured
 from ..acl import check_quota, consume_quota, require_command
 from ..app import app_chat_image_cq
 from ..utils import get_first_image, get_plaintext, get_reply, http_get

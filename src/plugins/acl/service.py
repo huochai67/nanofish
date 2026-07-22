@@ -22,6 +22,7 @@ _QUOTA_COMMANDS: dict[str, tuple[str, str]] = {
     "draw": ("acl_quota_draw_daily", "acl_cooldown_draw"),
     "genai": ("acl_quota_genai_daily", "acl_cooldown_genai"),
     "eh": ("acl_quota_eh_daily", "acl_cooldown_eh"),
+    "imgsearch": ("acl_quota_imgsearch_daily", "acl_cooldown_imgsearch"),
 }
 
 
@@ -112,6 +113,7 @@ def perm_for_command(command: str) -> Role:
         "draw": config.acl_perm_draw,
         "genai": config.acl_perm_genai,
         "eh": config.acl_perm_eh,
+        "imgsearch": config.acl_perm_imgsearch,
         "parser": config.acl_perm_parser,
         "health": config.acl_perm_health,
         "auth": config.acl_perm_auth,

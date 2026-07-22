@@ -1,11 +1,9 @@
-import asyncio
 import re
-import threading
-from typing import Any, ClassVar, Self
+from typing import Any
 
-import cloudscraper
 from loguru import logger
 
+from ..utils import CloudScraperClient
 from ..utils.http import http_post
 
 
@@ -63,49 +61,30 @@ class EhMetaData:
 
 
 class EhAPI:
-    _instance: ClassVar[Self | None] = None
-    _lock: ClassVar[threading.Lock] = threading.Lock()
-
-    def __new__(cls, *_args: Any, **_kwargs: Any) -> Self:
-        if not cls._instance:
-            with cls._lock:
-                if not cls._instance:
-                    cls._instance = super().__new__(cls)
-        return cls._instance
-
     def __init__(
         self,
         proxy: str | None = None,
         cookies: dict[str, str] | None = None,
     ) -> None:
-        if hasattr(self, "_initialized") and self._initialized:
-            return
-
         self.proxy = proxy
-        self.reqproxy = {"http": proxy, "https": proxy} if proxy else None
         self.cookies = cookies or {}
 
         if proxy:
             logger.debug(f"setting up proxy {proxy}")
 
-        self.scraper = cloudscraper.create_scraper(
-            interpreter="js2py",
-            delay=5,
-            debug=False,
+        self.scraper = CloudScraperClient(
+            proxy=proxy,
+            cookies=self.cookies,
         )
-        self._initialized = True
         logger.info("EhAPI 初始化完成")
 
     async def search(self, title: str, size: int = 10) -> list[EhMetaData]:
         if not self.cookies:
             raise ValueError("EhAPI cookies not configured")
 
-        response = await asyncio.to_thread(
-            self.scraper.get,
-            url=r"https://exhentai.org/",
+        response = await self.scraper.get(
+            "https://exhentai.org/",
             params={"f_search": title},
-            cookies=self.cookies,
-            proxies=self.reqproxy,
         )
 
         pattern = (

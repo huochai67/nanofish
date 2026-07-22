@@ -18,6 +18,7 @@ docker/          # 容器启动脚本
 | `llm` | `/llm`、`/draw` | 多模态对话（截图回传）；OpenAI 兼容文生图/图生图（默认 user + 日配额） |
 | `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入） |
 | `ehsearch` | `/eh <书名>` 或回复后 `/eh` | E-Hentai 搜索，结果 HTML 截图回传（默认 admin + 配额） |
+| `imgsearch` | `/imgsearch` | 回复或附带图片反向搜索 SauceNAO；可选 Soutubot（默认 user + 配额） |
 | `genai_detect` | `/genai` | AI 生成图片检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |
@@ -32,7 +33,7 @@ docker/          # 容器启动脚本
 | 默认门槛 | 命令 |
 |----------|------|
 | guest | `/jrrp` |
-| user | `/llm`、`/draw`、`/genai`、链接解析、`/bm` |
+| user | `/llm`、`/draw`、`/genai`、`/imgsearch`、链接解析、`/bm` |
 | admin | `/eh`、`/auth` 管理子命令 |
 | superuser | `/health` |
 
@@ -48,6 +49,7 @@ docker/          # 容器启动脚本
 - `/draw` 默认 5 次/日、冷却 60s
 - `/genai` 默认 20 次/日、冷却 10s
 - `/eh` 默认 20 次/日、冷却 10s
+- `/imgsearch` 默认 20 次/日、冷却 10s
 
 常用管理：
 
@@ -115,7 +117,8 @@ docker compose up -d --build
 | `IMAGE_MODEL` / `IMAGE_SIZE` / `IMAGE_RESPONSE_FORMAT` / `IMAGE_TIMEOUT` | `/draw` 生图（key/base 与对话共用） |
 | `SIGHTENGINE_API_USER` / `SIGHTENGINE_API_SECRET` | AI 图检测 |
 | `EH_IPB_*` / `EH_SK` / `EH_IGNEOUS` | ExHentai cookie |
-| `PROXY` | 可选 HTTP 代理 |
+| `IMGSEARCH_*` | 反向搜图的上游参数；Soutubot 仅使用自有授权 API key |
+| `PROXY` | 可选 HTTP 代理，应用于全部后端外部请求（`HTTP_PROXY` 兼容旧配置） |
 
 标签中文翻译在 **Next 前端**完成（[EhTagTranslation](https://github.com/EhTagTranslation/Database)）。构建/开发时会下载字典到 `app/public/ehtag-dict.json`（不入库）；Bot 只传原始 `namespace:tag`。
 

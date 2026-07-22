@@ -67,11 +67,12 @@ async def _thumb_to_data_url(url: str) -> str:
         if not content_type or not content_type.startswith("image/"):
             guessed, _ = mimetypes.guess_type(url)
             content_type = guessed or "image/jpeg"
-        b64 = base64.b64encode(resp.content).decode("ascii")
-        return f"data:{content_type};base64,{b64}"
     except Exception as e:  # noqa: BLE001
         logger.debug(f"eh thumb fetch failed: {url!r}: {e}")
         return ""
+    else:
+        b64 = base64.b64encode(resp.content).decode("ascii")
+        return f"data:{content_type};base64,{b64}"
 
 
 async def build_eh_payload(query: str, results: list[EhMetaData]) -> dict[str, Any]:

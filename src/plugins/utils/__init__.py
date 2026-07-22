@@ -3,8 +3,17 @@ from nonebot.adapters.onebot.v11 import Bot
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.plugin import PluginMetadata
 
+from .cloudscraper import CloudScraperClient
 from .config import Config
-from .http import HttpRequestError, http_client, http_get, http_post
+from .http import (
+    HttpRequestError,
+    configure_proxy_environment,
+    get_http_proxy,
+    http_client,
+    http_get,
+    http_post,
+    log_http_trace,
+)
 
 __plugin_meta__ = PluginMetadata(
     name="utils",
@@ -14,6 +23,7 @@ __plugin_meta__ = PluginMetadata(
 )
 
 _config = get_plugin_config(Config)
+configure_proxy_environment()
 
 
 def get_globalconfig() -> Config:
@@ -55,13 +65,17 @@ async def get_reply(bot: Bot, msg: Message) -> dict | None:
 
 
 __all__ = [
+    "CloudScraperClient",
     "HttpRequestError",
+    "configure_proxy_environment",
     "get_first_image",
     "get_globalconfig",
+    "get_http_proxy",
     "get_plaintext",
     "get_reply",
     "get_replyid",
     "http_client",
     "http_get",
     "http_post",
+    "log_http_trace",
 ]

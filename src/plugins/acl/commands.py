@@ -69,7 +69,7 @@ async def cmd_whoami(matcher: Matcher, event: MessageEvent) -> None:
         f"范围: {'允许' if scope_ok else '拒绝'}"
         + (f"（群 {gid}）" if gid is not None else "（私聊）"),
     ]
-    for cmd in ("llm", "draw", "genai", "eh"):
+    for cmd in ("llm", "draw", "genai", "eh", "imgsearch"):
         q = check_quota(event, cmd)
         if q.limit > 0:
             lines.append(f"/{cmd} 今日 {q.used}/{q.limit}")
@@ -80,8 +80,8 @@ async def cmd_whoami(matcher: Matcher, event: MessageEvent) -> None:
 
 async def cmd_quota(matcher: Matcher, event: MessageEvent, rest: list[str]) -> None:
     cmd = rest[0].lower() if rest else "llm"
-    if cmd not in {"llm", "draw", "genai", "eh"}:
-        await matcher.finish("用法: /auth quota [llm|draw|genai|eh]")
+    if cmd not in {"llm", "draw", "genai", "eh", "imgsearch"}:
+        await matcher.finish("用法: /auth quota [llm|draw|genai|eh|imgsearch]")
         return
     q = check_quota(event, cmd)
     if is_superuser(get_user_id(event)):
@@ -97,7 +97,7 @@ async def cmd_help(matcher: Matcher) -> None:
     await matcher.finish(
         "用法:\n"
         "/auth whoami\n"
-        "/auth quota [llm|draw|genai|eh]\n"
+        "/auth quota [llm|draw|genai|eh|imgsearch]\n"
         "/auth list\n"
         "/auth set <qq|@> <guest|user|admin>\n"
         "/auth unset <qq|@>\n"
@@ -143,7 +143,16 @@ async def cmd_list(matcher: Matcher, config: Config) -> None:
     lines.append(f"私聊: {'允许' if config.acl_allow_private else '拒绝'}")
     perms = ", ".join(
         f"{c}={perm_for_command(c).label()}"
-        for c in ("jrrp", "llm", "draw", "genai", "eh", "health", "auth")
+        for c in (
+            "jrrp",
+            "llm",
+            "draw",
+            "genai",
+            "eh",
+            "imgsearch",
+            "health",
+            "auth",
+        )
     )
     lines.append(f"命令门槛: {perms}")
     await matcher.finish("\n".join(lines))

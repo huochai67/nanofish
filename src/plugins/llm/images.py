@@ -13,6 +13,7 @@ import mimetypes
 from typing import Any
 from urllib.parse import urlparse
 
+import httpx
 from nonebot import get_plugin_config, logger, require
 from nonebot.adapters.onebot.v11.message import Message
 from openai import APIError, AsyncOpenAI, OpenAIError
@@ -20,7 +21,7 @@ from openai import APIError, AsyncOpenAI, OpenAIError
 from .config import Config
 
 require("utils")
-from ..utils import HttpRequestError, http_get
+from ..utils import HttpRequestError, get_http_proxy, http_get
 
 config: Config = get_plugin_config(Config)
 
@@ -34,10 +35,15 @@ class ImageAPIError(Exception):
 
 
 def _client() -> AsyncOpenAI:
+    proxy = get_http_proxy()
+    http_client = (
+        httpx.AsyncClient(proxy=proxy, timeout=config.image_timeout) if proxy else None
+    )
     return AsyncOpenAI(
         api_key=config.openai_api_key,
         base_url=config.openai_api_base,
         timeout=config.image_timeout,
+        http_client=http_client,
     )
 
 

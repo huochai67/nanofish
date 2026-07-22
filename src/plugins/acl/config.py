@@ -146,6 +146,10 @@ class Config(BaseModel):
     acl_perm_draw: RoleField = Field(default=Role.USER, description="/draw 最低角色")
     acl_perm_genai: RoleField = Field(default=Role.USER, description="/genai 最低角色")
     acl_perm_eh: RoleField = Field(default=Role.ADMIN, description="/eh 最低角色")
+    acl_perm_imgsearch: RoleField = Field(
+        default=Role.USER,
+        description="/imgsearch 最低角色",
+    )
     acl_perm_parser: RoleField = Field(
         default=Role.USER,
         description="链接解析与 /bm 最低角色",
@@ -180,6 +184,11 @@ class Config(BaseModel):
         ge=0,
         description="/eh 日配额",
     )
+    acl_quota_imgsearch_daily: NonNegIntField = Field(
+        default=20,
+        ge=0,
+        description="/imgsearch 日配额",
+    )
 
     # Cooldown seconds (0 = none)
     acl_cooldown_llm: NonNegFloatField = Field(
@@ -201,4 +210,9 @@ class Config(BaseModel):
         default=10.0,
         ge=0,
         description="/eh 冷却秒",
+    )
+    acl_cooldown_imgsearch: NonNegFloatField = Field(
+        default=10.0,
+        ge=0,
+        description="/imgsearch 冷却秒",
     )

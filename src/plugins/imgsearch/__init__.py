@@ -1,0 +1,316 @@
+import asyncio
+import mimetypes
+from dataclasses import dataclass
+from typing import Any
+
+from nonebot import get_plugin_config, logger, on_command, require
+from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11.message import Message
+from nonebot.exception import FinishedException
+from nonebot.plugin import PluginMetadata
+
+from .config import Config
+
+require("acl")
+require("utils")
+from ..acl import check_quota, consume_quota, require_command
+from ..utils import (
+    CloudScraperClient,
+    HttpRequestError,
+    get_first_image,
+    get_reply,
+    http_get,
+)
+
+__plugin_meta__ = PluginMetadata(
+    name="imgsearch",
+    description="SauceNAO 与 Soutubot 反向图片搜索",
+    usage="/imgsearch 后附图，或回复一张图片后发送 /imgsearch",
+    config=Config,
+)
+
+config: Config = get_plugin_config(Config)
+imgsearch = on_command(
+    "imgsearch",
+    priority=10,
+    block=True,
+    permission=require_command("imgsearch"),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SearchResult:
+    source: str
+    similarity: float | None
+    title: str
+    author: str
+    url: str
+
+
+def _text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _first_text(data: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, list):
+            value = next((item for item in value if isinstance(item, str)), None)
+        text = _text(value)
+        if text:
+            return text
+    return ""
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _image_filename(content_type: str) -> str:
+    extension = mimetypes.guess_extension(content_type) or ".jpg"
+    return f"image{extension}"
+
+
+async def _resolve_image_url(bot: Bot, event: MessageEvent) -> str | None:
+    direct = get_first_image(event.original_message)
+    if direct:
+        return direct
+
+    reply = await get_reply(bot=bot, msg=event.original_message)
+    if not reply:
+        return None
+    raw = reply.get("raw_message")
+    return get_first_image(Message(raw)) if raw else None
+
+
+async def _download_image(url: str) -> tuple[bytes, str]:
+    response = await http_get(url, proxy=config.proxy, timeout=config.imgsearch_timeout)
+    content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
+    if not content_type.startswith("image/"):
+        raise ValueError("消息图片不是有效的图片文件")
+    content_length = response.headers.get("content-length")
+    if content_length and int(content_length) > config.imgsearch_max_file_size:
+        raise ValueError("图片超过大小限制")
+    if len(response.content) > config.imgsearch_max_file_size:
+        raise ValueError("图片超过大小限制")
+    return response.content, content_type
+
+
+class ImageSearchClient:
+    def __init__(self) -> None:
+        self.saucenao = CloudScraperClient(
+            proxy=config.proxy,
+            debug_name="SauceNAO",
+        )
+        self.soutubot = CloudScraperClient(
+            proxy=config.proxy,
+            debug_name="Soutubot",
+        )
+
+    async def search_saucenao(
+        self,
+        image: bytes,
+        content_type: str,
+    ) -> list[SearchResult]:
+        params: dict[str, str | int] = {
+            "output_type": 2,
+            "numres": config.imgsearch_result_limit,
+            "db": 999,
+        }
+        if config.imgsearch_saucenao_api_key:
+            params["api_key"] = config.imgsearch_saucenao_api_key
+        response = await self.saucenao.post(
+            "https://saucenao.com/search.php",
+            params=params,
+            files={"file": (_image_filename(content_type), image, content_type)},
+            timeout=config.imgsearch_timeout,
+        )
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise HttpRequestError("SauceNAO 返回了非 JSON 响应") from e
+        if not isinstance(payload, dict):
+            raise HttpRequestError("SauceNAO 返回数据异常")
+
+        header = payload.get("header")
+        status = _number(header.get("status")) if isinstance(header, dict) else None
+        if isinstance(header, dict) and status not in {None, 0.0}:
+            message = _first_text(header, "message") or "上游请求失败"
+            raise HttpRequestError(f"SauceNAO: {message}")
+
+        results: list[SearchResult] = []
+        raw_results = payload.get("results")
+        if not isinstance(raw_results, list):
+            return results
+        for raw in raw_results:
+            if not isinstance(raw, dict):
+                continue
+            result_header = raw.get("header")
+            result_data = raw.get("data")
+            if not isinstance(result_header, dict) or not isinstance(result_data, dict):
+                continue
+            results.append(
+                SearchResult(
+                    source=_first_text(result_data, "source") or "SauceNAO",
+                    similarity=_number(result_header.get("similarity")),
+                    title=_first_text(result_data, "title", "eng_name", "jp_name"),
+                    author=_first_text(
+                        result_data,
+                        "member_name",
+                        "author_name",
+                        "creator",
+                        "author",
+                    ),
+                    url=_first_text(result_data, "ext_urls", "source_url", "url"),
+                )
+            )
+        return results
+
+    async def search_soutubot(
+        self,
+        image: bytes,
+        content_type: str,
+    ) -> list[SearchResult]:
+        api_key = config.imgsearch_soutubot_api_key.strip()
+        if not api_key:
+            return []
+        logger.info(
+            "[Soutubot] sending search: key_configured=true proxy_configured={} "
+            "image_bytes={} content_type={}",
+            bool(config.proxy),
+            len(image),
+            content_type,
+        )
+        response = await self.soutubot.post(
+            "https://soutubot.moe/api/search",
+            data={"factor": str(config.imgsearch_soutubot_factor)},
+            files={"file": (_image_filename(content_type), image, content_type)},
+            headers={
+                "accept": "application/json, text/plain, */*",
+                "origin": "https://soutubot.moe",
+                "referer": "https://soutubot.moe/",
+                "x-api-key": api_key,
+                "x-requested-with": "XMLHttpRequest",
+            },
+            timeout=config.imgsearch_timeout,
+        )
+        try:
+            payload = response.json()
+        except ValueError as e:
+            raise HttpRequestError("Soutubot 返回了非 JSON 响应") from e
+        raw_results: Any = payload
+        if isinstance(payload, dict):
+            raw_results = (
+                payload.get("results")
+                or payload.get("data")
+                or payload.get("result")
+                or []
+            )
+        if not isinstance(raw_results, list):
+            raise HttpRequestError("Soutubot 返回数据异常")
+
+        results: list[SearchResult] = []
+        for raw in raw_results:
+            if not isinstance(raw, dict):
+                continue
+            similarity = _number(
+                raw.get("similarity") or raw.get("score") or raw.get("confidence")
+            )
+            results.append(
+                SearchResult(
+                    source=_first_text(raw, "source", "site", "provider") or "Soutubot",
+                    similarity=similarity,
+                    title=_first_text(raw, "title", "name", "filename"),
+                    author=_first_text(raw, "author", "artist", "creator", "user"),
+                    url=_first_text(raw, "url", "source_url", "link", "ext_urls"),
+                )
+            )
+        return results
+
+    async def search(
+        self,
+        image: bytes,
+        content_type: str,
+    ) -> tuple[list[SearchResult], list[str]]:
+        tasks = [self.search_saucenao(image, content_type)]
+        source_names = ["SauceNAO"]
+        if config.imgsearch_soutubot_api_key:
+            tasks.append(self.search_soutubot(image, content_type))
+            source_names.append("Soutubot")
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+        results: list[SearchResult] = []
+        errors: list[str] = []
+        for source_name, response in zip(source_names, responses, strict=True):
+            if isinstance(response, BaseException):
+                message = (
+                    response.message
+                    if isinstance(response, HttpRequestError)
+                    else str(response)
+                )
+                errors.append(f"{source_name}: {message or type(response).__name__}")
+            else:
+                results.extend(response)
+        results.sort(key=lambda item: item.similarity or -1, reverse=True)
+        return results[: config.imgsearch_result_limit], errors
+
+
+search_client = ImageSearchClient()
+
+
+def _format_results(results: list[SearchResult], errors: list[str]) -> str:
+    lines = ["搜图结果"]
+    for index, result in enumerate(results, start=1):
+        similarity = (
+            f" {result.similarity:.2f}%" if result.similarity is not None else ""
+        )
+        lines.append(f"{index}. [{result.source}]{similarity}")
+        if result.title:
+            lines.append(f"标题: {result.title}")
+        if result.author:
+            lines.append(f"作者: {result.author}")
+        if result.url:
+            lines.append(result.url)
+    if errors:
+        lines.append("失败来源: " + "；".join(errors))
+    return "\n".join(lines)
+
+
+def _reply(event: MessageEvent, content: str) -> Message:
+    return MessageSegment.reply(event.message_id) + content
+
+
+@imgsearch.handle()
+async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
+    quota = check_quota(event, "imgsearch")
+    if not quota.allowed:
+        await imgsearch.finish(quota.message or "额度不足")
+        return
+
+    image_url = await _resolve_image_url(bot, event)
+    if not image_url:
+        await imgsearch.finish(
+            "用法: /imgsearch 后附图，或回复一张图片后发送 /imgsearch"
+        )
+        return
+
+    try:
+        image, content_type = await _download_image(image_url)
+        consume_quota(event, "imgsearch")
+        await imgsearch.send(_reply(event, "正在搜图，请稍候…"))
+        results, errors = await search_client.search(image, content_type)
+        if not results and not errors:
+            await imgsearch.finish(_reply(event, "未找到匹配结果"))
+            return
+        await imgsearch.finish(_reply(event, _format_results(results, errors)))
+    except FinishedException:
+        raise
+    except (HttpRequestError, ValueError) as e:
+        logger.warning("imgsearch request error: {}", e)
+        await imgsearch.finish(_reply(event, str(e)))
+    except Exception:  # noqa: BLE001
+        logger.exception("imgsearch unexpected error")
+        await imgsearch.finish(_reply(event, "搜图失败，请稍后重试"))
