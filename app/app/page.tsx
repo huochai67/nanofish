@@ -9,10 +9,12 @@ import {
   Code2,
   ArrowRight,
   FlaskConical,
+  Search,
 } from "lucide-react";
 import { Card } from "@heroui/react";
 import { MockChatData } from "./chat/types";
 import { MockEhData } from "./eh/types";
+import { MockImageSearchData } from "./imgsearch/types";
 
 type PageEntry = {
   href: string;
@@ -52,6 +54,19 @@ const PAGES: PageEntry[] = [
     iconBg: "bg-rose-600",
     mockSummary: `query: 「${MockEhData.query}」· ${MockEhData.results.length} 条结果`,
     mockPreview: MockEhData,
+    supportsDataQuery: true,
+  },
+  {
+    href: "/imgsearch",
+    title: "以图搜图结果",
+    description:
+      "SauceNAO 与 Soutubot 的反向图片搜索结果页，供 /imgsearch 截图回传。",
+    injectKey: "__IMGSEARCH_DATA__",
+    icon: <Search size={22} />,
+    accent: "from-cyan-500 to-teal-600",
+    iconBg: "bg-cyan-700",
+    mockSummary: `${MockImageSearchData.results.length} 条匹配结果`,
+    mockPreview: MockImageSearchData,
     supportsDataQuery: true,
   },
 ];

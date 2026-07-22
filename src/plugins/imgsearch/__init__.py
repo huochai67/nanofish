@@ -15,8 +15,10 @@ from nonebot.plugin import PluginMetadata
 from .config import Config
 
 require("acl")
+require("app")
 require("utils")
 from ..acl import check_quota, consume_quota, require_command
+from ..app import app_imgsearch_image_cq
 from ..utils import (
     CloudScraperClient,
     HttpRequestError,
@@ -48,6 +50,7 @@ class SearchResult:
     title: str
     author: str
     url: str
+    thumbnail: str
 
 
 def _text(value: Any) -> str:
@@ -81,6 +84,26 @@ def _soutubot_api_key(m: int, user_agent: str) -> str:
     timestamp = int(time.time())
     value = timestamp**2 + len(user_agent) ** 2 + m
     return base64.b64encode(str(value).encode()).decode().rstrip("=")[::-1]
+
+
+_SOUTUBOT_HOSTS = {
+    "nhentai": "nhentai.net",
+    "ehentai": "e-hentai.org",
+    "panda": "panda.chaika.moe",
+}
+
+
+def _soutubot_result_url(data: dict[str, Any]) -> str:
+    direct_url = _first_text(data, "url", "source_url", "link", "ext_urls")
+    if direct_url:
+        return direct_url
+
+    page_path = _text(data.get("pagePath"))
+    source = _text(data.get("source")).lower()
+    host = _SOUTUBOT_HOSTS.get(source)
+    if host and page_path.startswith("/"):
+        return f"https://{host}{page_path}"
+    return ""
 
 
 async def _resolve_image_url(bot: Bot, event: MessageEvent) -> str | None:
@@ -201,6 +224,7 @@ class ImageSearchClient:
                         "author",
                     ),
                     url=_first_text(result_data, "ext_urls", "source_url", "url"),
+                    thumbnail=_first_text(result_header, "thumbnail"),
                 )
             )
         return results
@@ -264,7 +288,10 @@ class ImageSearchClient:
                     similarity=similarity,
                     title=_first_text(raw, "title", "name", "filename"),
                     author=_first_text(raw, "author", "artist", "creator", "user"),
-                    url=_first_text(raw, "url", "source_url", "link", "ext_urls"),
+                    url=_soutubot_result_url(raw),
+                    thumbnail=_first_text(
+                        raw, "previewImageUrl", "thumbnail", "imageUrl"
+                    ),
                 )
             )
         return results
@@ -292,6 +319,12 @@ class ImageSearchClient:
                 errors.append(f"{source_name}: {message or type(response).__name__}")
             else:
                 results.extend(response)
+        results = [
+            result
+            for result in results
+            if result.similarity is None
+            or result.similarity >= config.imgsearch_similarity_threshold
+        ]
         results.sort(key=lambda item: item.similarity or -1, reverse=True)
         return results[: config.imgsearch_result_limit], errors
 
@@ -315,6 +348,30 @@ def _format_results(results: list[SearchResult], errors: list[str]) -> str:
     if errors:
         lines.append("失败来源: " + "；".join(errors))
     return "\n".join(lines)
+
+
+def _build_payload(
+    image: bytes,
+    content_type: str,
+    results: list[SearchResult],
+    errors: list[str],
+) -> dict[str, Any]:
+    encoded_image = base64.b64encode(image).decode("ascii")
+    return {
+        "image": f"data:{content_type};base64,{encoded_image}",
+        "results": [
+            {
+                "source": result.source,
+                "similarity": result.similarity,
+                "title": result.title,
+                "author": result.author,
+                "url": result.url,
+                "thumbnail": result.thumbnail,
+            }
+            for result in results
+        ],
+        "errors": errors,
+    }
 
 
 def _reply(event: MessageEvent, content: str) -> Message:
@@ -343,7 +400,15 @@ async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
         if not results and not errors:
             await imgsearch.finish(_reply(event, "未找到匹配结果"))
             return
-        await imgsearch.finish(_reply(event, _format_results(results, errors)))
+        try:
+            result_image = await app_imgsearch_image_cq(
+                _build_payload(image, content_type, results, errors)
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("imgsearch result page screenshot failed")
+            await imgsearch.finish(_reply(event, _format_results(results, errors)))
+            return
+        await imgsearch.finish(result_image)
     except FinishedException:
         raise
     except (HttpRequestError, ValueError) as e:

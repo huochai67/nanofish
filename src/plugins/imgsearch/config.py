@@ -8,5 +8,6 @@ class Config(BaseModel):
     imgsearch_timeout: float = Field(default=30.0, gt=0)
     imgsearch_max_file_size: int = Field(default=8 * 1024 * 1024, gt=0)
     imgsearch_result_limit: int = Field(default=5, ge=1, le=10)
+    imgsearch_similarity_threshold: float = Field(default=0.0, ge=0, le=100)
     imgsearch_saucenao_api_key: str = ""
     imgsearch_soutubot_factor: float = Field(default=1.2, gt=0)

@@ -124,6 +124,11 @@ class Client:
     async def shoot_eh(self, eh_data: dict[str, Any]) -> str:
         return await self.shoot_with_data("/eh", "__EH_DATA__", eh_data)
 
+    async def shoot_imgsearch(self, imgsearch_data: dict[str, Any]) -> str:
+        return await self.shoot_with_data(
+            "/imgsearch", "__IMGSEARCH_DATA__", imgsearch_data
+        )
+
     async def close(self) -> None:
         async with self._async_lock:
             await self._close_unlocked()
@@ -216,4 +221,13 @@ async def app_eh_image_b64(eh_data: dict[str, Any]) -> str:
 
 async def app_eh_image_cq(eh_data: dict[str, Any]) -> Message:
     base64img = await app_eh_image_b64(eh_data)
+    return Message(f"[CQ:image,file=base64://{base64img}]")
+
+
+async def app_imgsearch_image_b64(imgsearch_data: dict[str, Any]) -> str:
+    return await client.shoot_imgsearch(imgsearch_data)
+
+
+async def app_imgsearch_image_cq(imgsearch_data: dict[str, Any]) -> Message:
+    base64img = await app_imgsearch_image_b64(imgsearch_data)
     return Message(f"[CQ:image,file=base64://{base64img}]")
