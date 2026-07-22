@@ -3,21 +3,25 @@ import mimetypes
 import zipfile
 from io import BytesIO
 from pathlib import Path
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
+import httpx
 from nonebot import get_plugin_config, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.exception import FinishedException
 from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
+from openai import AsyncOpenAI
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
 
 require("acl")
 require("app")
 require("utils")
-import litellm  # noqa: I001  # import after proxy environment is configured
 from ..acl import check_quota, consume_quota, require_command
 from ..app import app_chat_image_cq
-from ..utils import get_first_image, get_plaintext, get_reply, http_get
+from ..utils import get_first_image, get_http_proxy, get_plaintext, get_reply, http_get
 from .config import Config
 from .images import (
     ImageAPIError,
@@ -66,7 +70,7 @@ class CompletionMessage:
     def __init__(self) -> None:
         self.content: list = []
 
-    def role(self, _role: Literal["user", "system", "developer"]) -> Self:
+    def role(self, _role: Literal["user", "system", "developer", "assistant"]) -> Self:
         self.content.append(
             {
                 "role": _role,
@@ -155,19 +159,27 @@ class CompletionMessage:
         )
         return self
 
-    def build(self) -> list[litellm.Message]:
+    def build(self) -> list[dict[str, Any]]:
         return self.content
 
 
-async def openai(model: str, message: list[litellm.Message]) -> litellm.Message:
-    response = await litellm.acompletion(
+async def openai(
+    model: str,
+    message: list[dict[str, Any]],
+) -> dict[str, Any]:
+    proxy = get_http_proxy()
+    http_client = httpx.AsyncClient(proxy=proxy) if proxy else None
+    async with AsyncOpenAI(
         api_key=config.openai_api_key,
-        api_base=config.openai_api_base,
-        model=model,
-        messages=message,
-    )
+        base_url=config.openai_api_base,
+        http_client=http_client,
+    ) as client:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=cast("list[ChatCompletionMessageParam]", message),
+        )
     retmsg = response.choices[0].message
-    return CompletionMessage().role(retmsg.role).text(retmsg.content).build()[0]
+    return CompletionMessage().role(retmsg.role).text(retmsg.content or "").build()[0]
 
 
 async def get_reply_message(bot: Bot, message_id: int) -> Message:
@@ -232,7 +244,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         logger.debug(f"[LLM]llmmsg: {llmmsg}")
 
         consume_quota(event, "llm")
-        retmsg = await openai(model=f"openai/{config.model}", message=llmmsg)
+        retmsg = await openai(model=config.model, message=llmmsg)
         logger.debug(f"[LLM]retmsg: {retmsg}")
 
         llmmsg.append(retmsg)
