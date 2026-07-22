@@ -21,6 +21,8 @@ docker/          # 容器启动脚本
 | `genai_detect` | `/genai` | AI 生成图片检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |
+| `nonebot_plugin_parser` | 自动解析支持平台链接、`/bm` | 核心链接解析（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
+| `parser_acl` | — | 在解析插件执行前应用 Nanofish ACL 策略 |
 | `utils` | — | 共享消息解析工具 |
 
 ### 权限（acl）
@@ -30,7 +32,7 @@ docker/          # 容器启动脚本
 | 默认门槛 | 命令 |
 |----------|------|
 | guest | `/jrrp` |
-| user | `/llm`、`/draw`、`/genai` |
+| user | `/llm`、`/draw`、`/genai`、链接解析、`/bm` |
 | admin | `/eh`、`/auth` 管理子命令 |
 | superuser | `/health` |
 
@@ -94,7 +96,7 @@ docker compose up -d --build
 
 | 服务 | 说明 | 端口 |
 |------|------|------|
-| `nonebot` | 机器人 + Playwright Chromium | `PORT`（默认 8080） |
+| `nonebot` | 机器人 + Playwright Chromium + FFmpeg | `PORT`（默认 8080） |
 | `frontend` | Next.js 截图页 | `FRONTEND_PORT`（默认 3000） |
 
 容器内 `APP_API_BASE` 固定为 `http://frontend:3000`（compose 覆盖 `.env.prod`）。无 `.env.prod` 时 compose 会报错，请先复制示例文件。
@@ -106,7 +108,8 @@ docker compose up -d --build
 | 变量 | 用途 |
 |------|------|
 | `SUPERUSERS` | 超级用户 QQ 列表 |
-| `ACL_*` | 权限/群白名单/配额（见 `.env.example`） |
+| `ACL_*` | 权限/群白名单/配额（含 `ACL_PERM_PARSER`，见 `.env.example`） |
+| `PARSER_*` | 链接解析的媒体限制、平台禁用、可选 cookie/代理 |
 | `APP_API_BASE` | 前端 base URL |
 | `MODEL` / `OPENAI_API_KEY` / `OPENAI_API_BASE` | LLM 对话 |
 | `IMAGE_MODEL` / `IMAGE_SIZE` / `IMAGE_RESPONSE_FORMAT` / `IMAGE_TIMEOUT` | `/draw` 生图（key/base 与对话共用） |

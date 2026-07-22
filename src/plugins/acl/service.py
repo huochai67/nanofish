@@ -112,6 +112,7 @@ def perm_for_command(command: str) -> Role:
         "draw": config.acl_perm_draw,
         "genai": config.acl_perm_genai,
         "eh": config.acl_perm_eh,
+        "parser": config.acl_perm_parser,
         "health": config.acl_perm_health,
         "auth": config.acl_perm_auth,
     }

@@ -34,7 +34,9 @@ COPY ./docker/_main.py /app
 COPY --from=requirements_stage /wheel /wheel
 
 # Offline install from prebuilt wheels, then gunicorn (not in project deps) + Chromium
-RUN pip install --no-cache-dir --no-index --find-links=/wheel -r /wheel/requirements.txt \
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && pip install --no-cache-dir --no-index --find-links=/wheel -r /wheel/requirements.txt \
   && pip install --no-cache-dir gunicorn \
   && rm -rf /wheel \
   && playwright install --with-deps chromium \

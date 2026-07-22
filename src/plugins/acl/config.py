@@ -146,6 +146,10 @@ class Config(BaseModel):
     acl_perm_draw: RoleField = Field(default=Role.USER, description="/draw 最低角色")
     acl_perm_genai: RoleField = Field(default=Role.USER, description="/genai 最低角色")
     acl_perm_eh: RoleField = Field(default=Role.ADMIN, description="/eh 最低角色")
+    acl_perm_parser: RoleField = Field(
+        default=Role.USER,
+        description="链接解析与 /bm 最低角色",
+    )
     acl_perm_health: RoleField = Field(
         default=Role.SUPERUSER,
         description="/health 最低角色",
