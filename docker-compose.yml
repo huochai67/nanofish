@@ -2,7 +2,7 @@ x-config-host: &config-host ${HOST:-0.0.0.0}
 x-config-port: &config-port ${PORT:-8080}
 
 services:
-  frontend:
+  nanofish-frontend:
     build:
       context: ./app
       dockerfile: Dockerfile
@@ -14,7 +14,7 @@ services:
       HOSTNAME: 0.0.0.0
     restart: always
 
-  nonebot:
+  nanofish:
     build: .
     ports:
       - *config-port
