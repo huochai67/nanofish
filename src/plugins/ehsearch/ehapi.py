@@ -3,8 +3,7 @@ from typing import Any
 
 from loguru import logger
 
-from ..utils import CloudScraperClient
-from ..utils.http import http_post
+from ..utils.http import http_get, http_post
 
 
 class EhMetaData:
@@ -72,19 +71,17 @@ class EhAPI:
         if proxy:
             logger.debug(f"setting up proxy {proxy}")
 
-        self.scraper = CloudScraperClient(
-            proxy=proxy,
-            cookies=self.cookies,
-        )
         logger.info("EhAPI 初始化完成")
 
     async def search(self, title: str, size: int = 10) -> list[EhMetaData]:
         if not self.cookies:
             raise ValueError("EhAPI cookies not configured")
 
-        response = await self.scraper.get(
+        response = await http_get(
             "https://exhentai.org/",
             params={"f_search": title},
+            proxy=self.proxy,
+            cookies=self.cookies,
         )
 
         pattern = (

@@ -20,11 +20,11 @@ require("utils")
 from ..acl import check_quota, consume_quota, require_command
 from ..app import app_imgsearch_image_cq
 from ..utils import (
-    CloudScraperClient,
     HttpRequestError,
     get_first_image,
     get_reply,
     http_get,
+    http_post,
 )
 
 __plugin_meta__ = PluginMetadata(
@@ -92,6 +92,11 @@ _SOUTUBOT_HOSTS = {
     "panda": "panda.chaika.moe",
 }
 
+_SOUTUBOT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
 
 def _soutubot_result_url(data: dict[str, Any]) -> str:
     direct_url = _first_text(data, "url", "source_url", "link", "ext_urls")
@@ -133,20 +138,13 @@ async def _download_image(url: str) -> tuple[bytes, str]:
 
 class ImageSearchClient:
     def __init__(self) -> None:
-        self.saucenao = CloudScraperClient(
-            proxy=config.proxy,
-            debug_name="SauceNAO",
-        )
-        self.soutubot = CloudScraperClient(
-            proxy=config.proxy,
-            debug_name="Soutubot",
-        )
         self._soutubot_m: int | None = None
 
     async def _refresh_soutubot_cache(self) -> None:
-        # The homepage provides both Cloudflare cookies and the current key salt.
-        response = await self.soutubot.get(
+        response = await http_get(
             "https://soutubot.moe/",
+            headers={"user-agent": _SOUTUBOT_USER_AGENT},
+            proxy=config.proxy,
             timeout=config.imgsearch_timeout,
         )
         match = re.search(r"m:\s*(-?\d+),", response.text)
@@ -157,15 +155,15 @@ class ImageSearchClient:
     async def _soutubot_headers(self) -> dict[str, str]:
         if self._soutubot_m is None:
             await self._refresh_soutubot_cache()
-        user_agent = self.soutubot.user_agent
-        if user_agent is None or self._soutubot_m is None:
+        if self._soutubot_m is None:
             raise HttpRequestError("Soutubot 初始化失败")
         return {
             "accept": "application/json, text/plain, */*",
             "dnt": "1",
             "origin": "https://soutubot.moe",
             "referer": "https://soutubot.moe/",
-            "x-api-key": _soutubot_api_key(self._soutubot_m, user_agent),
+            "user-agent": _SOUTUBOT_USER_AGENT,
+            "x-api-key": _soutubot_api_key(self._soutubot_m, _SOUTUBOT_USER_AGENT),
             "x-requested-with": "XMLHttpRequest",
         }
 
@@ -181,10 +179,11 @@ class ImageSearchClient:
         }
         if config.imgsearch_saucenao_api_key:
             params["api_key"] = config.imgsearch_saucenao_api_key
-        response = await self.saucenao.post(
+        response = await http_post(
             "https://saucenao.com/search.php",
             params=params,
             files={"file": (_image_filename(content_type), image, content_type)},
+            proxy=config.proxy,
             timeout=config.imgsearch_timeout,
         )
         try:
@@ -242,22 +241,24 @@ class ImageSearchClient:
             content_type,
         )
         try:
-            response = await self.soutubot.post(
+            response = await http_post(
                 "https://soutubot.moe/api/search",
                 data={"factor": str(config.imgsearch_soutubot_factor)},
                 files={"file": (_image_filename(content_type), image, content_type)},
                 headers=await self._soutubot_headers(),
+                proxy=config.proxy,
                 timeout=config.imgsearch_timeout,
             )
         except HttpRequestError as e:
             if e.status not in {401, 403}:
                 raise
             self._soutubot_m = None
-            response = await self.soutubot.post(
+            response = await http_post(
                 "https://soutubot.moe/api/search",
                 data={"factor": str(config.imgsearch_soutubot_factor)},
                 files={"file": (_image_filename(content_type), image, content_type)},
                 headers=await self._soutubot_headers(),
+                proxy=config.proxy,
                 timeout=config.imgsearch_timeout,
             )
         try:
