@@ -46,7 +46,7 @@ nonebot-plugin-localstore = ["nonebot_plugin_localstore"]
 line-length = 88
 target-version = "py311"
 # Third-party source is vendored for local customization, not restyled to this project.
-extend-exclude = ["src/plugins/nonebot_plugin_parser"]
+extend-exclude = ["src/plugins/media_parser"]
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -124,7 +124,7 @@ keep-runtime-typing = true
 pythonVersion = "3.11"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
-exclude = ["src/plugins/nonebot_plugin_parser"]
+exclude = ["src/plugins/media_parser"]
 
 [dependency-groups]
 dev = [

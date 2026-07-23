@@ -46,7 +46,7 @@ __plugin_meta__ = PluginMetadata(
 require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler
 
-_PARSER_PLUGIN = "nonebot_plugin_parser"
+_PARSER_PLUGIN = "media_parser"
 _PARSER_COMMAND_PRIORITY = 3
 
 
@@ -78,7 +78,7 @@ for _registered_matchers in matcher_registry.values():
     for _matcher in _registered_matchers:
         if (
             _matcher.plugin_name == _PARSER_PLUGIN
-            and _matcher.module_name == "src.plugins.nonebot_plugin_parser.matchers"
+            and _matcher.module_name == "src.plugins.media_parser.matchers"
             and _matcher.priority == _PARSER_COMMAND_PRIORITY
         ):
             _matcher.permission = require_command("parser")

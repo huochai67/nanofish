@@ -129,5 +129,5 @@ pconfig: Config = get_plugin_config(Config)
 """插件配置"""
 gconfig = get_driver().config
 """全局配置"""
-_nickname: str = next(iter(gconfig.nickname), "nonebot-plugin-parser")
+_nickname: str = next(iter(gconfig.nickname), "media-parser")
 """机器人昵称"""
