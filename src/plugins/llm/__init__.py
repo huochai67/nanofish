@@ -23,8 +23,8 @@ from ..acl import check_quota, consume_quota, require_command
 from ..app import app_chat_image_cq
 from ..utils import (
     finish_processing_reply,
-    get_first_image,
     get_http_proxy,
+    get_image_urls,
     get_plaintext,
     get_reply,
     http_get,
@@ -32,6 +32,7 @@ from ..utils import (
 )
 from .config import Config
 from .images import (
+    MAX_REFERENCE_IMAGES,
     ImageAPIError,
     image_edit,
     image_generate,
@@ -45,7 +46,8 @@ __plugin_meta__ = PluginMetadata(
     description="多模态 LLM 对话与 OpenAI 兼容生图/图生图",
     usage=(
         "/llm <内容>，可附带图片/文件，或回复消息；"
-        "/draw <描述> 文生图，附图或回复图片则为图生图"
+        "/draw <描述> 文生图；直接引用消息与当前消息中的图片可作为参考图"
+        "（引用优先，最多 16 张）"
     ),
     config=Config,
 )
@@ -294,33 +296,22 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         )
 
 
-async def _resolve_draw_prompt(bot: Bot, event: MessageEvent, arg: Message) -> str:
-    """Prefer command args; fall back to plaintext of the replied message."""
+async def _resolve_draw_request(
+    bot: Bot,
+    event: MessageEvent,
+    arg: Message,
+) -> tuple[str, list[str]]:
+    """Resolve prompt and direct-reply images, without traversing nested replies."""
     direct = get_plaintext(arg).strip()
-    if direct:
-        return direct
-
     msg_reply = await get_reply(bot=bot, msg=event.original_message)
-    if not msg_reply:
-        return ""
-    raw = msg_reply.get("raw_message")
-    if not raw:
-        return ""
-    return get_plaintext(Message(raw)).strip()
-
-
-async def _resolve_draw_image_url(bot: Bot, event: MessageEvent) -> str | None:
-    """Image from current message, else from replied message."""
-    url = get_first_image(event.original_message)
-    if url:
-        return url
-    msg_reply = await get_reply(bot=bot, msg=event.original_message)
-    if not msg_reply:
-        return None
-    raw = msg_reply.get("raw_message")
-    if not raw:
-        return None
-    return get_first_image(Message(raw))
+    raw = msg_reply.get("raw_message") if msg_reply else None
+    replied_message = Message(raw) if raw else None
+    replied_prompt = get_plaintext(replied_message).strip() if replied_message else ""
+    prompt = direct or replied_prompt
+    image_urls = (
+        get_image_urls(replied_message) if replied_message else []
+    ) + get_image_urls(event.original_message)
+    return prompt, image_urls
 
 
 def _reply_to_event(event: MessageEvent, content: Message | str) -> Message:
@@ -340,15 +331,19 @@ async def handle_draw(
             await draw.finish(quota.message or "额度不足", at_sender=True)
             return
 
-        prompt = await _resolve_draw_prompt(bot, event, arg)
+        prompt, image_urls = await _resolve_draw_request(bot, event, arg)
         if not prompt:
             await draw.finish(
-                "用法: /draw <描述>；附图或回复图片则为图生图",
+                "用法: /draw <描述>；可附图或直接引用含图片的消息作为参考图",
                 at_sender=True,
             )
             return
-
-        image_url = await _resolve_draw_image_url(bot, event)
+        if len(image_urls) > MAX_REFERENCE_IMAGES:
+            await draw.finish(
+                f"参考图最多支持 {MAX_REFERENCE_IMAGES} 张",
+                at_sender=True,
+            )
+            return
     except FinishedException:
         raise
     except Exception as e:  # noqa: BLE001
@@ -359,9 +354,9 @@ async def handle_draw(
     consume_quota(event, "draw")
     processing = await send_processing_reply(draw, bot, event, "正在生成图片，请稍候…")
     try:
-        if image_url:
-            logger.debug("[LLM/draw] edit prompt=%r image=%r", prompt, image_url)
-            b64_list = await image_edit(prompt, image_url)
+        if image_urls:
+            logger.debug("[LLM/draw] edit prompt=%r images=%r", prompt, image_urls)
+            b64_list = await image_edit(prompt, image_urls)
         else:
             logger.debug("[LLM/draw] generate prompt=%r", prompt)
             b64_list = await image_generate(prompt)
@@ -375,7 +370,11 @@ async def handle_draw(
         raise
     except ImageAPIError as e:
         logger.warning("[LLM/draw] api error: %s", e.message)
-        await finish_processing_reply(draw, processing, _reply_to_event(event, e.message))
+        await finish_processing_reply(
+            draw,
+            processing,
+            _reply_to_event(event, e.message),
+        )
     except Exception as e:  # noqa: BLE001
         logger.exception("[LLM/draw] unexpected error: %s", e)
         await finish_processing_reply(

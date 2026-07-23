@@ -47,10 +47,17 @@ def get_replyid(msg: Message) -> int | None:
 
 
 def get_first_image(msg: Message) -> str | None:
-    for segment in msg:
-        if segment.type == "image":
-            return segment.data.get("url")
-    return None
+    image_urls = get_image_urls(msg)
+    return image_urls[0] if image_urls else None
+
+
+def get_image_urls(msg: Message) -> list[str]:
+    """Return image URLs in their original message order."""
+    return [
+        str(url)
+        for segment in msg
+        if segment.type == "image" and (url := segment.data.get("url"))
+    ]
 
 
 def get_plaintext(msg: Message) -> str:
@@ -94,7 +101,9 @@ def _sent_message_id(result: object) -> int | None:
     try:
         return int(message_id)
     except (TypeError, ValueError):
-        logger.warning("processing message send returned invalid message id: %r", result)
+        logger.warning(
+            "processing message send returned invalid message id: %r", result
+        )
         return None
 
 
@@ -128,15 +137,16 @@ __all__ = [
     "CloudScraperClient",
     "HttpRequestError",
     "configure_proxy_environment",
+    "finish_processing_reply",
     "get_first_image",
     "get_globalconfig",
     "get_http_proxy",
+    "get_image_urls",
     "get_plaintext",
     "get_reply",
     "get_replyid",
-    "finish_processing_reply",
-    "http_error_message",
     "http_client",
+    "http_error_message",
     "http_get",
     "http_post",
     "log_http_trace",

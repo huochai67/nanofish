@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import base64
 import mimetypes
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
@@ -19,6 +19,9 @@ from nonebot.adapters.onebot.v11.message import Message
 from openai import APIStatusError, APITimeoutError, AsyncOpenAI, OpenAIError
 
 from .config import Config
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 require("utils")
 from ..utils import (
@@ -29,6 +32,8 @@ from ..utils import (
 )
 
 config: Config = get_plugin_config(Config)
+
+MAX_REFERENCE_IMAGES = 16
 
 
 class ImageAPIError(Exception):
@@ -192,14 +197,14 @@ async def image_generate(
 
 async def image_edit(
     prompt: str,
-    image: bytes | str,
+    image: bytes | str | Sequence[bytes | str],
     *,
     model: str | None = None,
     size: str | None = None,
     response_format: str | None = None,
     filename: str = "image.png",
 ) -> list[str]:
-    """Image-to-image (edits). ``image`` is raw bytes or downloadable URL.
+    """Image-to-image edits using one or more raw images or downloadable URLs.
 
     Returns base64 strings (no data: prefix). Does not enforce ACL.
     """
@@ -207,7 +212,14 @@ async def image_edit(
     if not text:
         raise ImageAPIError("prompt 不能为空")
 
-    name, data, mime = await _to_file_tuple(image, filename=filename)
+    images = [image] if isinstance(image, bytes | str) else list(image)
+    if not images:
+        raise ImageAPIError("至少需要一张参考图")
+    if len(images) > MAX_REFERENCE_IMAGES:
+        raise ImageAPIError(f"参考图最多支持 {MAX_REFERENCE_IMAGES} 张")
+
+    image_files = [await _to_file_tuple(item, filename=filename) for item in images]
+    image_param: Any = image_files[0] if len(image_files) == 1 else image_files
     kwargs = _optional_kwargs(
         size=_resolve_size(size),
         response_format=_resolve_response_format(response_format),
@@ -216,7 +228,7 @@ async def image_edit(
         async with _client() as client:
             response = await client.images.edit(
                 model=_resolve_model(model),
-                image=(name, data, mime),
+                image=image_param,
                 prompt=text,
                 n=1,
                 **kwargs,
@@ -242,6 +254,7 @@ def images_to_cq(b64_list: list[str]) -> Message:
 
 
 __all__ = [
+    "MAX_REFERENCE_IMAGES",
     "ImageAPIError",
     "image_edit",
     "image_generate",
