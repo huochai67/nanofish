@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from nonebot import get_plugin_config, logger, on_command, require
+from nonebot import logger, on_command, require
 from nonebot.adapters.onebot.v11 import Message, MessageEvent
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
+
+from src.plugin_config import get_yaml_plugin_config
 
 require("nonebot_plugin_localstore")
 
@@ -41,7 +43,7 @@ __plugin_meta__ = PluginMetadata(
     config=Config,
 )
 
-config: Config = get_plugin_config(Config)
+config: Config = get_yaml_plugin_config(Config, "acl")
 
 acl_store.load()
 quota_tracker.load()

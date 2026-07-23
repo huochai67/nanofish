@@ -1,8 +1,10 @@
 from pathlib import Path
 
 from bilibili_api.video import VideoCodecs, VideoQuality
-from nonebot import get_driver, get_plugin_config, require
+from nonebot import get_driver, require
 from pydantic import BaseModel
+
+from src.plugin_config import get_yaml_plugin_config
 
 from .constants import PlatformEnum
 
@@ -125,7 +127,8 @@ class Config(BaseModel):
         """是否需要转发媒体内容"""
         return self.parser_need_forward_contents
 
-pconfig: Config = get_plugin_config(Config)
+
+pconfig: Config = get_yaml_plugin_config(Config, "media_parser")
 """插件配置"""
 gconfig = get_driver().config
 """全局配置"""

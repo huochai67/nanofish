@@ -20,6 +20,8 @@ services:
       - *config-port
     env_file:
       - .env.prod
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     environment:
       ENVIRONMENT: prod
       HOST: *config-host

@@ -72,8 +72,9 @@ docker/          # 容器启动脚本
 # 安装依赖（uv）
 uv sync
 
-# 复制并填写环境变量
+# 复制并填写运行环境与业务配置
 cp .env.example .env
+cp config.example.yaml config.yaml
 
 # 启动（开发热重载）
 nb run --reload
@@ -93,7 +94,8 @@ pnpm dev   # 默认 http://localhost:3000
 
 ```bash
 cp .env.example .env.prod
-# 编辑 .env.prod（含 DRIVER、API Key 等）
+cp config.example.yaml config.yaml
+# 编辑 .env.prod（NoneBot、网络、日志和截图配置）与 config.yaml（业务插件配置）
 docker compose up -d --build
 ```
 
@@ -105,24 +107,24 @@ docker compose up -d --build
 | `frontend` | Next.js 截图页 | `FRONTEND_PORT`（默认 3000） |
 | `flaresolverr` | Cloudflare 验证 cookie 获取服务 | 仅 Compose 内部网络 |
 
-容器内 `APP_API_BASE` 固定为 `http://frontend:3000`（compose 覆盖 `.env.prod`）。无 `.env.prod` 时 compose 会报错，请先复制示例文件。
+容器内 `APP_API_BASE` 固定为 `http://nanofish-frontend:3000`（compose 覆盖 `.env.prod`）。Compose 会将宿主机 `config.yaml` 以只读方式挂载到容器；缺少 `.env.prod` 或 `config.yaml` 时无法启动。
 `flaresolverr` 不开放宿主机端口；非 Docker 部署时，将 `FLARESOLVERR_URL` 指向自行运行的内部服务。
 
-## 环境变量
+## 配置
 
-见 [`.env.example`](.env.example)。敏感项（API Key、exhentai cookie、Sightengine 凭证）**不要**写入源码。
+环境变量见 [`.env.example`](.env.example)，仅用于 NoneBot 基础配置、全局网络与日志，以及截图页面插件。业务插件配置见 [`config.example.yaml`](config.example.yaml)：插件名为一级键、插件配置项为二级键；ACL 的功能配置位于 `acl.plugins` 列表中。`.env`、`.env.prod` 和 `config.yaml` 均不会提交；敏感项（API Key、exhentai cookie、Sightengine 凭证）只写入本地 `config.yaml`。
 
-| 变量 | 用途 |
+| 配置项 | 用途 |
 |------|------|
 | `SUPERUSERS` | 超级用户 QQ 列表 |
-| `ACL_*` | 权限/群白名单/配额（含 `ACL_PERM_PARSER`，见 `.env.example`） |
-| `PARSER_*` | 链接解析的媒体限制、平台禁用、可选 cookie/代理 |
+| `acl_*` | `config.yaml` 中的权限、群白名单与配额 |
+| `parser_*` | `config.yaml` 中的链接解析媒体限制、平台禁用、可选 cookie/代理 |
 | `APP_API_BASE` | 前端 base URL |
-| `MODEL` / `OPENAI_API_KEY` / `OPENAI_API_BASE` | LLM 对话 |
-| `IMAGE_MODEL` / `IMAGE_SIZE` / `IMAGE_RESPONSE_FORMAT` / `IMAGE_TIMEOUT` | `/draw` 生图（key/base 与对话共用） |
-| `SIGHTENGINE_API_USER` / `SIGHTENGINE_API_SECRET` | AI 图检测 |
-| `EH_IPB_*` / `EH_SK` / `EH_IGNEOUS` | ExHentai cookie |
-| `IMGSEARCH_*` | 反向搜图的上游参数 |
+| `model` / `openai_api_key` / `openai_api_base` | `config.yaml` 中的 LLM 对话参数 |
+| `image_model` / `image_size` / `image_response_format` / `image_timeout` | `config.yaml` 中的 `/draw` 生图参数 |
+| `sightengine_api_user` / `sightengine_api_secret` | `config.yaml` 中的 AI 图检测凭证 |
+| `eh_ipb_*` / `eh_sk` / `eh_igneous` | `config.yaml` 中的 ExHentai cookie |
+| `imgsearch_*` | `config.yaml` 中的反向搜图上游参数 |
 | `PROXY` | 可选代理，应用于全部后端外部请求（兼容读取 `HTTP_PROXY` / `HTTPS_PROXY`） |
 | `FLARESOLVERR_URL` | FlareSolverr API 地址；Compose 默认 `http://flaresolverr:8191/v1` |
 

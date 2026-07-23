@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nonebot import get_driver, get_plugin_config
+from nonebot import get_driver
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
     MessageEvent,
@@ -10,12 +10,14 @@ from nonebot.adapters.onebot.v11 import (
 )
 from nonebot.permission import Permission
 
+from src.plugin_config import get_yaml_plugin_config
+
 from .config import Config
 from .quota import QuotaResult, quota_tracker
 from .roles import Role
 from .store import acl_store
 
-config: Config = get_plugin_config(Config)
+config: Config = get_yaml_plugin_config(Config, "acl")
 
 _QUOTA_COMMANDS: dict[str, tuple[str, str, str]] = {
     "llm": (

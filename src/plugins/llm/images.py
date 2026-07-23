@@ -14,9 +14,11 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 import httpx
-from nonebot import get_plugin_config, logger, require
+from nonebot import logger, require
 from nonebot.adapters.onebot.v11.message import Message
 from openai import APIStatusError, APITimeoutError, AsyncOpenAI, OpenAIError
+
+from src.plugin_config import get_yaml_plugin_config
 
 from .config import Config
 
@@ -31,7 +33,7 @@ from ..utils import (
     request_error_message,
 )
 
-config: Config = get_plugin_config(Config)
+config: Config = get_yaml_plugin_config(Config, "llm")
 
 MAX_REFERENCE_IMAGES = 16
 

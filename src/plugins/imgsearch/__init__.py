@@ -6,11 +6,13 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from nonebot import get_plugin_config, logger, on_command, require
+from nonebot import logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
+
+from src.plugin_config import get_yaml_plugin_config
 
 from .config import Config
 
@@ -36,7 +38,7 @@ __plugin_meta__ = PluginMetadata(
     config=Config,
 )
 
-config: Config = get_plugin_config(Config)
+config: Config = get_yaml_plugin_config(Config, "imgsearch")
 imgsearch = on_command(
     "imgsearch",
     priority=10,

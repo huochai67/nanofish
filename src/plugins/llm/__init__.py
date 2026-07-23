@@ -6,12 +6,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import httpx
-from nonebot import get_plugin_config, logger, on_command, require
+from nonebot import logger, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
 from nonebot.exception import FinishedException
 from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
 from openai import AsyncOpenAI, OpenAIError
+
+from src.plugin_config import get_yaml_plugin_config
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
@@ -52,7 +54,7 @@ __plugin_meta__ = PluginMetadata(
     config=Config,
 )
 
-config: Config = get_plugin_config(Config)
+config: Config = get_yaml_plugin_config(Config, "llm")
 
 llm = on_command("llm", permission=require_command("llm"))
 draw = on_command(

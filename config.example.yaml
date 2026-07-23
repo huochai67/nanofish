@@ -1,0 +1,110 @@
+# ACL 插件（角色、范围与配额）。角色可为 guest、user、admin、superuser。
+acl:
+  # 空列表表示不限制群；填写 QQ 群号可启用群白名单。
+  acl_allowed_groups: []
+  # 是否允许私聊触发业务命令（superuser 不受此项限制）。
+  acl_allow_private: false
+  # 静态管理员、用户白名单和黑名单 QQ 号列表。
+  acl_admins: []
+  acl_user_whitelist: []
+  acl_blacklist: []
+  # 每项的 name 不能重复。quota_daily、rate_limit_per_minute、cooldown
+  # 分别代表每日配额、跨用户每分钟请求上限和个人冷却秒数；0 均表示不限制。
+  plugins:
+    - name: jrrp
+      permission: guest
+    - name: llm
+      permission: user
+      quota_daily: 10
+      rate_limit_per_minute: 0
+      cooldown: 30
+    - name: draw
+      permission: user
+      quota_daily: 5
+      rate_limit_per_minute: 0
+      cooldown: 60
+    - name: genai
+      permission: user
+      quota_daily: 20
+      rate_limit_per_minute: 0
+      cooldown: 10
+    - name: eh
+      permission: admin
+      quota_daily: 20
+      rate_limit_per_minute: 0
+      cooldown: 10
+    - name: imgsearch
+      permission: user
+      quota_daily: 20
+      rate_limit_per_minute: 0
+      cooldown: 10
+    - name: parser
+      permission: user
+    - name: health
+      permission: superuser
+    - name: auth
+      permission: admin
+
+# 链接解析插件。cookie 仅填写本地 config.yaml，更新后需重启机器人。
+media_parser:
+  # Bilibili、小红书和 YouTube cookie；没有则保持空字符串。
+  parser_bili_ck: ""
+  parser_xhs_ck: ""
+  parser_ytb_ck: ""
+  # 仅链接解析请求使用的代理；null 表示不单独设置。
+  parser_proxy: null
+  # 是否上传音频文件，以及是否将媒体编码为 base64 发送。
+  parser_need_upload: false
+  parser_use_base64: false
+  # 单位分别为 MB 和秒。
+  parser_max_size: 20
+  parser_duration_maximum: 120
+  # 是否在解析结果中追加原始链接。
+  parser_append_url: true
+  # 禁用的平台列表。核心部署默认关闭 yt-dlp/Deno 依赖的平台。
+  parser_disabled_platforms: [youtube, tiktok, twitter, nga]
+  # 是否以合并转发消息发送媒体内容。
+  parser_need_forward_contents: true
+
+# 健康检查插件
+health:
+  # 前端 HTTP 探测超时，单位为秒。
+  health_http_timeout: 5.0
+
+# LLM 插件（对话与生图/编辑）。API Key 仅填写本地 config.yaml。
+llm:
+  # OpenAI 兼容的对话模型、密钥和 API 根路径。
+  model: gpt-4o-mini
+  openai_api_key: sk-xxx
+  openai_api_base: https://api.openai.com/v1
+  # 图像模型与可选尺寸；response_format 可为 b64_json 或 url。
+  image_model: dall-e-3
+  image_size: 1024x1024
+  image_response_format: b64_json
+  # 生图请求超时，单位为秒。
+  image_timeout: 120
+
+# AI 图检测插件。凭证从 Sightengine 控制台获取。
+genai_detect:
+  sightengine_api_user: ""
+  sightengine_api_secret: ""
+
+# ExHentai 搜索插件。填入浏览器 cookie 对应的值。
+ehsearch:
+  eh_ipb_member_id: ""
+  eh_ipb_pass_hash: ""
+  eh_sk: ""
+  eh_igneous: ""
+
+# 反向搜图插件
+imgsearch:
+  # 上游请求超时（秒）、可接受文件最大字节数和单个上游返回结果数。
+  imgsearch_timeout: 30
+  imgsearch_max_file_size: 8388608
+  imgsearch_result_limit: 5
+  # 最低相似度百分比，0 表示不筛选。
+  imgsearch_similarity_threshold: 0
+  # 可选 SauceNAO API Key。
+  imgsearch_saucenao_api_key: ""
+  # Soutubot 搜索灵敏度系数。
+  imgsearch_soutubot_factor: 1.2

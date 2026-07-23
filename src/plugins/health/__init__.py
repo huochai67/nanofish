@@ -2,10 +2,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 import httpx
-from nonebot import get_bots, get_plugin, get_plugin_config, on_command, require
+from nonebot import get_bots, get_plugin, on_command, require
 from nonebot.adapters.onebot.v11 import Bot, MessageEvent
 from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
+
+from src.plugin_config import get_yaml_plugin_config
 
 from .config import Config
 
@@ -31,7 +33,7 @@ __plugin_meta__ = PluginMetadata(
     config=Config,
 )
 
-config: Config = get_plugin_config(Config)
+config: Config = get_yaml_plugin_config(Config, "health")
 
 health = on_command(
     "health",

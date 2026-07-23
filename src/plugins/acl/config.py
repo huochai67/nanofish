@@ -1,23 +1,17 @@
-"""ACL plugin config.
-
-NoneBot loads env into plugin config via a Settings-style parser. Bare
-``list[int]`` fields are JSON-decoded and **fail hard** on trailing comments
-(common in Docker Compose ``env_file``). We use ``Annotated[..., BeforeValidator]``
-so values stay as strings until our parser strips comments and coerces types.
-"""
+"""ACL plugin configuration validation."""
 
 from __future__ import annotations
 
 import json
 from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, Field, model_validator
 
 from .roles import Role
 
 
 def _strip_inline_comment(raw: str) -> str:
-    """Strip unquoted trailing ``# ...`` (Docker env_file does not remove these)."""
+    """Strip unquoted trailing comments from string values."""
     in_str = False
     quote: str | None = None
     for i, ch in enumerate(raw):
@@ -112,9 +106,64 @@ RoleField = Annotated[Role, BeforeValidator(_parse_role)]
 NonNegIntField = Annotated[int, BeforeValidator(_parse_nonneg_int)]
 NonNegFloatField = Annotated[float, BeforeValidator(_parse_nonneg_float)]
 
+_ACL_PLUGIN_FIELDS = {
+    "jrrp": {"permission"},
+    "llm": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
+    "draw": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
+    "genai": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
+    "eh": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
+    "imgsearch": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
+    "parser": {"permission"},
+    "health": {"permission"},
+    "auth": {"permission"},
+}
+
 
 class Config(BaseModel):
-    """ACL plugin config (env names match field names, case-insensitive)."""
+    """ACL plugin configuration from ``config.yaml``."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _flatten_plugin_settings(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+
+        values = value.copy()
+        plugins = values.pop("plugins", [])
+        if not isinstance(plugins, list):
+            msg = "acl.plugins must be a list"
+            raise TypeError(msg)
+
+        seen: set[str] = set()
+        for item in plugins:
+            if not isinstance(item, dict):
+                msg = "each acl.plugins item must be a mapping"
+                raise TypeError(msg)
+            name = item.get("name")
+            if not isinstance(name, str) or name not in _ACL_PLUGIN_FIELDS:
+                msg = f"unknown ACL plugin: {name!r}"
+                raise ValueError(msg)
+            if name in seen:
+                msg = f"duplicate ACL plugin: {name}"
+                raise ValueError(msg)
+            seen.add(name)
+
+            allowed = {"name", *_ACL_PLUGIN_FIELDS[name]}
+            unknown = set(item) - allowed
+            if unknown:
+                msg = f"unsupported ACL settings for {name}: {sorted(unknown)}"
+                raise ValueError(msg)
+            for setting, raw in item.items():
+                if setting == "name":
+                    continue
+                field = {
+                    "permission": f"acl_perm_{name}",
+                    "quota_daily": f"acl_quota_{name}_daily",
+                    "rate_limit_per_minute": f"acl_rate_limit_{name}_per_minute",
+                    "cooldown": f"acl_cooldown_{name}",
+                }[setting]
+                values[field] = raw
+        return values
 
     # Scope
     acl_allowed_groups: IntListField = Field(
@@ -126,7 +175,7 @@ class Config(BaseModel):
         description="是否允许私聊触发业务命令（superuser 始终可）",
     )
 
-    # Static roles from env
+    # Static roles from configuration
     acl_admins: IntListField = Field(
         default_factory=list,
         description="管理员 QQ 号列表",
@@ -137,7 +186,7 @@ class Config(BaseModel):
     )
     acl_blacklist: IntListField = Field(
         default_factory=list,
-        description="静态黑名单（env）；运行时 ban 另存 localstore",
+        description="静态黑名单；运行时 ban 另存 localstore",
     )
 
     # Min role per command
