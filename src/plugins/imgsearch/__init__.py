@@ -21,10 +21,12 @@ from ..acl import check_quota, consume_quota, require_command
 from ..app import app_imgsearch_image_cq
 from ..utils import (
     HttpRequestError,
+    finish_processing_reply,
     get_first_image,
     get_reply,
     http_get,
     http_post,
+    send_processing_reply,
 )
 
 __plugin_meta__ = PluginMetadata(
@@ -393,28 +395,42 @@ async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
         )
         return
 
+    processing = await send_processing_reply(imgsearch, bot, event, "正在搜图，请稍候…")
     try:
         image, content_type = await _download_image(image_url)
         consume_quota(event, "imgsearch")
-        await imgsearch.send(_reply(event, "正在搜图，请稍候…"))
         results, errors = await search_client.search(image, content_type)
         if not results and not errors:
-            await imgsearch.finish(_reply(event, "未找到匹配结果"))
+            await finish_processing_reply(
+                imgsearch,
+                processing,
+                _reply(event, "未找到匹配结果"),
+            )
             return
         try:
             result_image = await app_imgsearch_image_cq(
                 _build_payload(image, content_type, results, errors)
             )
+        except FinishedException:
+            raise
         except Exception:  # noqa: BLE001
             logger.exception("imgsearch result page screenshot failed")
-            await imgsearch.finish(_reply(event, _format_results(results, errors)))
+            await finish_processing_reply(
+                imgsearch,
+                processing,
+                _reply(event, _format_results(results, errors)),
+            )
             return
-        await imgsearch.finish(result_image)
+        await finish_processing_reply(imgsearch, processing, result_image)
     except FinishedException:
         raise
     except (HttpRequestError, ValueError) as e:
         logger.warning("imgsearch request error: {}", e)
-        await imgsearch.finish(_reply(event, str(e)))
+        await finish_processing_reply(imgsearch, processing, _reply(event, str(e)))
     except Exception:  # noqa: BLE001
         logger.exception("imgsearch unexpected error")
-        await imgsearch.finish(_reply(event, "搜图失败，请稍后重试"))
+        await finish_processing_reply(
+            imgsearch,
+            processing,
+            _reply(event, "搜图失败，请稍后重试"),
+        )

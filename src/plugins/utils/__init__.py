@@ -1,6 +1,10 @@
-from nonebot import get_plugin_config
-from nonebot.adapters.onebot.v11 import Bot
+from dataclasses import dataclass
+from typing import NoReturn
+
+from nonebot import get_plugin_config, logger
+from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.message import Message
+from nonebot.matcher import Matcher
 from nonebot.plugin import PluginMetadata
 
 from .cloudscraper import CloudScraperClient
@@ -10,9 +14,11 @@ from .http import (
     configure_proxy_environment,
     get_http_proxy,
     http_client,
+    http_error_message,
     http_get,
     http_post,
     log_http_trace,
+    request_error_message,
 )
 
 __plugin_meta__ = PluginMetadata(
@@ -64,6 +70,60 @@ async def get_reply(bot: Bot, msg: Message) -> dict | None:
     return await bot.get_msg(message_id=message_id)
 
 
+@dataclass(frozen=True, slots=True)
+class ProcessingReply:
+    """A temporary acknowledgement that is removed after the final response."""
+
+    bot: Bot
+    message_id: int | None
+
+    async def retract(self) -> None:
+        if self.message_id is None:
+            return
+        try:
+            await self.bot.call_api("delete_msg", message_id=self.message_id)
+        except Exception:  # noqa: BLE001
+            logger.exception("failed to retract processing message %s", self.message_id)
+
+
+def _sent_message_id(result: object) -> int | None:
+    if not isinstance(result, dict):
+        logger.warning("processing message send returned no message id: %r", result)
+        return None
+    message_id = result.get("message_id")
+    try:
+        return int(message_id)
+    except (TypeError, ValueError):
+        logger.warning("processing message send returned invalid message id: %r", result)
+        return None
+
+
+async def send_processing_reply(
+    matcher: Matcher,
+    bot: Bot,
+    event: MessageEvent,
+    text: str,
+) -> ProcessingReply:
+    """Reply to a request immediately and retain the acknowledgement message id."""
+    result = await matcher.send(MessageSegment.reply(event.message_id) + text)
+    return ProcessingReply(bot=bot, message_id=_sent_message_id(result))
+
+
+async def finish_processing_reply(
+    matcher: Matcher,
+    processing: ProcessingReply,
+    message: Message | str,
+    *,
+    at_sender: bool = False,
+) -> NoReturn:
+    """Send the final response before retracting its temporary acknowledgement."""
+    try:
+        await matcher.send(message, at_sender=at_sender)
+    finally:
+        await processing.retract()
+    await matcher.finish()
+
+
 __all__ = [
     "CloudScraperClient",
     "HttpRequestError",
@@ -74,8 +134,12 @@ __all__ = [
     "get_plaintext",
     "get_reply",
     "get_replyid",
+    "finish_processing_reply",
+    "http_error_message",
     "http_client",
     "http_get",
     "http_post",
     "log_http_trace",
+    "request_error_message",
+    "send_processing_reply",
 ]

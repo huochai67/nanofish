@@ -8,7 +8,7 @@ import httpx
 from nonebot import get_plugin_config, logger
 
 from .config import Config
-from .http import HttpRequestError, get_http_proxy, log_http_trace
+from .http import HttpRequestError, get_http_proxy, http_error_message, log_http_trace
 
 
 class CloudScraperClient:
@@ -70,23 +70,17 @@ class CloudScraperClient:
                 response = await client.post(self._flaresolverr_url, json=payload)
                 response.raise_for_status()
                 data = response.json()
-        except httpx.TimeoutException as e:
-            raise HttpRequestError("请求超时，请稍后重试") from e
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            reason = e.response.reason_phrase
-            raise HttpRequestError(
-                f"FlareSolverr 请求失败: HTTP {status} {reason}".rstrip()
-            ) from e
-        except (httpx.HTTPError, ValueError) as e:
-            raise HttpRequestError(f"FlareSolverr 请求失败: {type(e).__name__}") from e
+        except httpx.HTTPError as e:
+            status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
+            raise HttpRequestError(http_error_message(e), status=status) from e
+        except ValueError as e:
+            raise HttpRequestError("请求失败，请稍后重试") from e
 
         if not isinstance(data, dict) or data.get("status") != "ok":
-            message = data.get("message") if isinstance(data, dict) else "响应格式异常"
-            raise HttpRequestError(f"FlareSolverr 请求失败: {message or '未知错误'}")
+            raise HttpRequestError("请求失败，请稍后重试")
         solution = data.get("solution")
         if not isinstance(solution, dict):
-            raise HttpRequestError("FlareSolverr 请求失败: 响应格式异常")
+            raise HttpRequestError("请求失败，请稍后重试")
 
         status = solution.get("status")
         body = solution.get("response")
@@ -211,8 +205,6 @@ class CloudScraperClient:
             if self._trace:
                 log_http_trace(self._debug_name or "flaresolverr", response)
             response.raise_for_status()
-        except httpx.TimeoutException as e:
-            raise HttpRequestError("请求超时，请稍后重试") from e
         except httpx.HTTPStatusError as e:
             if (
                 method.upper() == "GET"
@@ -227,13 +219,12 @@ class CloudScraperClient:
                 return self._solver_response
             response = e.response
             status = response.status_code
-            reason = response.reason_phrase
             raise HttpRequestError(
-                f"请求失败: HTTP {status} {reason}".rstrip(),
+                http_error_message(e),
                 status=status,
             ) from e
         except httpx.HTTPError as e:
-            raise HttpRequestError(f"请求失败: {type(e).__name__}") from e
+            raise HttpRequestError(http_error_message(e)) from e
         else:
             return response
 

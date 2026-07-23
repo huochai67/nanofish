@@ -3,6 +3,8 @@ from enum import StrEnum
 
 import httpx
 from nonebot import get_bots, get_plugin, get_plugin_config, on_command, require
+from nonebot.adapters.onebot.v11 import Bot, MessageEvent
+from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
 
 from .config import Config
@@ -13,7 +15,14 @@ require("utils")
 from ..acl import require_command
 from ..app import client as app_client
 from ..app import config as app_config
-from ..utils import get_globalconfig, log_http_trace
+from ..utils import (
+    finish_processing_reply,
+    get_globalconfig,
+    http_error_message,
+    log_http_trace,
+    request_error_message,
+    send_processing_reply,
+)
 
 __plugin_meta__ = PluginMetadata(
     name="health",
@@ -91,12 +100,14 @@ async def check_frontend() -> CheckResult:
         return CheckResult(
             "前端",
             Status.OK if response.is_success else Status.FAIL,
-            f"HTTP {response.status_code} ({base})",
+            (
+                f"HTTP {response.status_code} ({base})"
+                if response.is_success
+                else request_error_message(status=response.status_code)
+            ),
         )
-    except httpx.TimeoutException:
-        return CheckResult("前端", Status.FAIL, f"超时 ({base})")
     except httpx.HTTPError as e:
-        return CheckResult("前端", Status.FAIL, f"{type(e).__name__}: {e} ({base})")
+        return CheckResult("前端", Status.FAIL, http_error_message(e))
 
 
 def _plugin_config(
@@ -150,21 +161,15 @@ async def check_eh_tags() -> CheckResult:
             return CheckResult(
                 "EH 标签表",
                 Status.FAIL,
-                f"HTTP {response.status_code} ({url})",
+                request_error_message(status=response.status_code),
             )
         # lightweight sanity check without full parse cost on huge body
         size = len(response.content)
         if size < _MIN_EHTAG_DICT_BYTES:
             return CheckResult("EH 标签表", Status.FAIL, f"响应过短 ({size} B)")
         return CheckResult("EH 标签表", Status.OK, f"可用 ({size // 1024} KB)")
-    except httpx.TimeoutException:
-        return CheckResult("EH 标签表", Status.FAIL, f"超时 ({url})")
     except httpx.HTTPError as e:
-        return CheckResult(
-            "EH 标签表",
-            Status.FAIL,
-            f"{type(e).__name__}: {e} ({url})",
-        )
+        return CheckResult("EH 标签表", Status.FAIL, http_error_message(e))
 
 
 def check_sightengine() -> CheckResult:
@@ -194,13 +199,23 @@ def format_results(results: list[CheckResult]) -> str:
 
 
 @health.handle()
-async def handle_function() -> None:
-    results: list[CheckResult] = [
-        check_bots(),
-        check_playwright(),
-        await check_frontend(),
-        check_llm(),
-        await check_eh_tags(),
-        check_sightengine(),
-    ]
-    await health.finish(format_results(results))
+async def handle_function(bot: Bot, event: MessageEvent) -> None:
+    processing = await send_processing_reply(health, bot, event, "正在检查，请稍候…")
+    try:
+        results: list[CheckResult] = [
+            check_bots(),
+            check_playwright(),
+            await check_frontend(),
+            check_llm(),
+            await check_eh_tags(),
+            check_sightengine(),
+        ]
+        await finish_processing_reply(health, processing, format_results(results))
+    except FinishedException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        await finish_processing_reply(
+            health,
+            processing,
+            f"健康检查失败: {type(e).__name__}: {e}",
+        )

@@ -11,7 +11,7 @@ from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegme
 from nonebot.exception import FinishedException
 from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAIError
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
@@ -21,7 +21,15 @@ require("app")
 require("utils")
 from ..acl import check_quota, consume_quota, require_command
 from ..app import app_chat_image_cq
-from ..utils import get_first_image, get_http_proxy, get_plaintext, get_reply, http_get
+from ..utils import (
+    finish_processing_reply,
+    get_first_image,
+    get_http_proxy,
+    get_plaintext,
+    get_reply,
+    http_get,
+    send_processing_reply,
+)
 from .config import Config
 from .images import (
     ImageAPIError,
@@ -29,6 +37,7 @@ from .images import (
     image_generate,
     image_to_cq,
     images_to_cq,
+    openai_error_message,
 )
 
 __plugin_meta__ = PluginMetadata(
@@ -239,7 +248,15 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         if event.raw_message == "":
             await llm.finish("请发送内容", at_sender=True)
             return
+    except FinishedException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"[LLM] request setup failed: {e}")
+        await llm.finish("处理失败，请稍后重试", at_sender=True)
+        return
 
+    processing = await send_processing_reply(llm, bot, event, "正在处理，请稍候…")
+    try:
         llmmsg = (await parse_message(bot=bot, message=event.original_message)).build()
         logger.debug(f"[LLM]llmmsg: {llmmsg}")
 
@@ -248,7 +265,9 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         logger.debug(f"[LLM]retmsg: {retmsg}")
 
         llmmsg.append(retmsg)
-        await llm.finish(
+        await finish_processing_reply(
+            llm,
+            processing,
             await app_chat_image_cq({"messages": llmmsg}),
             at_sender=True,
         )
@@ -256,10 +275,23 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         raise
     except ValueError as e:
         logger.warning(f"[LLM] input error: {e}")
-        await llm.finish(str(e), at_sender=True)
+        await finish_processing_reply(llm, processing, str(e), at_sender=True)
+    except OpenAIError as e:
+        logger.warning(f"[LLM] api error: {e}")
+        await finish_processing_reply(
+            llm,
+            processing,
+            openai_error_message(e),
+            at_sender=True,
+        )
     except Exception as e:  # noqa: BLE001
         logger.exception(f"[LLM] unexpected error: {e}")
-        await llm.finish("处理失败，请稍后重试", at_sender=True)
+        await finish_processing_reply(
+            llm,
+            processing,
+            "处理失败，请稍后重试",
+            at_sender=True,
+        )
 
 
 async def _resolve_draw_prompt(bot: Bot, event: MessageEvent, arg: Message) -> str:
@@ -317,10 +349,16 @@ async def handle_draw(
             return
 
         image_url = await _resolve_draw_image_url(bot, event)
-        consume_quota(event, "draw")
-        # Image APIs are slow: ack first, then reply with the result.
-        await draw.send(_reply_to_event(event, "正在生成图片，请稍候…"))
+    except FinishedException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.exception("[LLM/draw] request setup failed: %s", e)
+        await draw.finish(_reply_to_event(event, "生图失败，请稍后重试"))
+        return
 
+    consume_quota(event, "draw")
+    processing = await send_processing_reply(draw, bot, event, "正在生成图片，请稍候…")
+    try:
         if image_url:
             logger.debug("[LLM/draw] edit prompt=%r image=%r", prompt, image_url)
             b64_list = await image_edit(prompt, image_url)
@@ -328,15 +366,23 @@ async def handle_draw(
             logger.debug("[LLM/draw] generate prompt=%r", prompt)
             b64_list = await image_generate(prompt)
 
-        await draw.finish(_reply_to_event(event, images_to_cq(b64_list)))
+        await finish_processing_reply(
+            draw,
+            processing,
+            _reply_to_event(event, images_to_cq(b64_list)),
+        )
     except FinishedException:
         raise
     except ImageAPIError as e:
         logger.warning("[LLM/draw] api error: %s", e.message)
-        await draw.finish(_reply_to_event(event, e.message))
+        await finish_processing_reply(draw, processing, _reply_to_event(event, e.message))
     except Exception as e:  # noqa: BLE001
         logger.exception("[LLM/draw] unexpected error: %s", e)
-        await draw.finish(_reply_to_event(event, "生图失败，请稍后重试"))
+        await finish_processing_reply(
+            draw,
+            processing,
+            _reply_to_event(event, "生图失败，请稍后重试"),
+        )
 
 
 __all__ = [

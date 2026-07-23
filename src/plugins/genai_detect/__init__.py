@@ -8,7 +8,14 @@ from .config import Config
 require("acl")
 require("utils")
 from ..acl import check_quota, consume_quota, require_command
-from ..utils import HttpRequestError, get_first_image, get_reply, http_get
+from ..utils import (
+    HttpRequestError,
+    finish_processing_reply,
+    get_first_image,
+    get_reply,
+    http_get,
+    send_processing_reply,
+)
 
 __plugin_meta__ = PluginMetadata(
     name="genai-detect",
@@ -44,6 +51,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
     if not imageurl:
         await genai.finish("被回复消息中没有图片")
 
+    processing = await send_processing_reply(genai, bot, event, "正在检测图片，请稍候…")
     try:
         consume_quota(event, "genai")
         req = await http_get(
@@ -59,21 +67,37 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         output = req.json()
     except HttpRequestError as e:
         logger.warning(f"sightengine api error: {e}")
-        await genai.finish(f"Sightengine API {e.message}")
+        await finish_processing_reply(
+            genai,
+            processing,
+            e.message,
+        )
     except Exception as e:  # noqa: BLE001
         logger.exception("sightengine api unexpected error")
-        await genai.finish(f"Sightengine API 处理失败: {type(e).__name__}: {e}")
+        await finish_processing_reply(
+            genai,
+            processing,
+            f"Sightengine API 处理失败: {type(e).__name__}: {e}",
+        )
 
     if output.get("status") != "success":
         logger.debug(f"sightengine api failed: {output}")
         error = output.get("error") or output.get("message") or output
-        await genai.finish(f"Sightengine API 请求失败: {error}")
+        await finish_processing_reply(
+            genai,
+            processing,
+            f"Sightengine API 请求失败: {error}",
+        )
 
     try:
         rate = float(output["type"]["ai_generated"])
     except (KeyError, TypeError, ValueError) as e:
         logger.warning(f"sightengine api unexpected response: {output}")
-        await genai.finish(f"Sightengine API 返回数据异常: {e}")
+        await finish_processing_reply(
+            genai,
+            processing,
+            f"Sightengine API 返回数据异常: {e}",
+        )
 
     if rate < AI_UNLIKELY_THRESHOLD:
         ret = "不太可能是 AI 生成"
@@ -82,4 +106,4 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
     else:
         ret = "无法确定是否为 AI 生成"
 
-    await genai.finish(f"sightengine: {ret} ({rate:.2f})")
+    await finish_processing_reply(genai, processing, f"sightengine: {ret} ({rate:.2f})")

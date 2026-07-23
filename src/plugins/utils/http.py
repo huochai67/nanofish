@@ -130,14 +130,31 @@ def http_client(
     )
 
 
-def _map_httpx_error(exc: httpx.HTTPError) -> HttpRequestError:
+def request_error_message(
+    *,
+    status: int | None = None,
+    timeout: bool = False,
+) -> str:
+    """Return the standard user-facing message for an external HTTP failure."""
+    if timeout:
+        return "请求超时，请稍后重试"
+    if status is not None:
+        return f"请求失败（HTTP {status}），请稍后重试"
+    return "网络请求失败，请稍后重试"
+
+
+def http_error_message(exc: httpx.HTTPError) -> str:
+    """Map an httpx exception to the standard user-facing error message."""
     if isinstance(exc, httpx.TimeoutException):
-        return HttpRequestError("请求超时，请稍后重试")
+        return request_error_message(timeout=True)
     if isinstance(exc, httpx.HTTPStatusError):
-        status = exc.response.status_code
-        reason = exc.response.reason_phrase
-        return HttpRequestError(f"请求失败: HTTP {status} {reason}".rstrip())
-    return HttpRequestError(f"请求失败: {type(exc).__name__}")
+        return request_error_message(status=exc.response.status_code)
+    return request_error_message()
+
+
+def _map_httpx_error(exc: httpx.HTTPError) -> HttpRequestError:
+    status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+    return HttpRequestError(http_error_message(exc), status=status)
 
 
 async def http_get(

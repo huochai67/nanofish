@@ -18,7 +18,14 @@ require("app")
 require("utils")
 from ..acl import check_quota, consume_quota, require_command
 from ..app import app_eh_image_cq
-from ..utils import HttpRequestError, get_plaintext, get_reply, http_get
+from ..utils import (
+    HttpRequestError,
+    finish_processing_reply,
+    get_plaintext,
+    get_reply,
+    http_get,
+    send_processing_reply,
+)
 
 __plugin_meta__ = PluginMetadata(
     name="ehsearch",
@@ -114,25 +121,30 @@ async def handle_function(
         return
 
     logger.info(f"searching {search}")
+    processing = await send_processing_reply(ehsearch, bot, event, "正在搜索，请稍候…")
     try:
         consume_quota(event, "eh")
         result = await ehapi.search(title=search, size=3)
         logger.debug(result)
 
         if not result:
-            await ehsearch.finish("未找到相关结果")
+            await finish_processing_reply(ehsearch, processing, "未找到相关结果")
             return
 
         payload = await build_eh_payload(search, result)
         image = await app_eh_image_cq(payload)
-        await ehsearch.finish(image)
+        await finish_processing_reply(ehsearch, processing, image)
     except FinishedException:
         raise
     except HttpRequestError as e:
         logger.warning(f"ehsearch request error: {e}")
-        await ehsearch.finish(f"请求失败: {e.message}")
+        await finish_processing_reply(ehsearch, processing, e.message)
         return
     except Exception as e:  # noqa: BLE001
         logger.exception("ehsearch unexpected error")
-        await ehsearch.finish(f"处理失败: {type(e).__name__}: {e}")
+        await finish_processing_reply(
+            ehsearch,
+            processing,
+            f"处理失败: {type(e).__name__}: {e}",
+        )
         return

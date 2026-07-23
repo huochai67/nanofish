@@ -16,12 +16,17 @@ from urllib.parse import urlparse
 import httpx
 from nonebot import get_plugin_config, logger, require
 from nonebot.adapters.onebot.v11.message import Message
-from openai import APIError, AsyncOpenAI, OpenAIError
+from openai import APIStatusError, APITimeoutError, AsyncOpenAI, OpenAIError
 
 from .config import Config
 
 require("utils")
-from ..utils import HttpRequestError, get_http_proxy, http_get
+from ..utils import (
+    HttpRequestError,
+    get_http_proxy,
+    http_get,
+    request_error_message,
+)
 
 config: Config = get_plugin_config(Config)
 
@@ -92,7 +97,7 @@ async def _download_image(url: str) -> tuple[bytes, str, str]:
     try:
         resp = await http_get(url, timeout=config.image_timeout)
     except HttpRequestError as e:
-        raise ImageAPIError(f"下载参考图失败: {e.message}") from e
+        raise ImageAPIError(e.message) from e
     content_type = resp.headers.get("content-type")
     filename, mime = _guess_filename_and_type(url, content_type)
     if not resp.content:
@@ -137,14 +142,21 @@ async def _response_to_b64_list(response: Any) -> list[str]:
     return results
 
 
+def openai_error_message(exc: OpenAIError) -> str:
+    """Map OpenAI SDK transport failures to the shared HTTP error messages."""
+    if isinstance(exc, APITimeoutError):
+        return request_error_message(timeout=True)
+    if isinstance(exc, APIStatusError):
+        body = exc.body
+        error = body.get("error") if isinstance(body, dict) else None
+        if isinstance(error, dict) and error.get("code") == "moderation_blocked":
+            return "请求因安全策略被拒绝，请调整内容后重试"
+        return request_error_message(status=exc.status_code)
+    return request_error_message()
+
+
 def _map_openai_error(exc: OpenAIError) -> ImageAPIError:
-    if isinstance(exc, APIError):
-        detail = exc.message or str(exc)
-        status = getattr(exc, "status_code", None)
-        if status is not None:
-            return ImageAPIError(f"生图 API 失败 (HTTP {status}): {detail}")
-        return ImageAPIError(f"生图 API 失败: {detail}")
-    return ImageAPIError(f"生图 API 失败: {type(exc).__name__}: {exc}")
+    return ImageAPIError(openai_error_message(exc))
 
 
 async def image_generate(
@@ -235,4 +247,5 @@ __all__ = [
     "image_generate",
     "image_to_cq",
     "images_to_cq",
+    "openai_error_message",
 ]
