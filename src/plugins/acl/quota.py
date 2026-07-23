@@ -1,4 +1,4 @@
-"""Daily quota and cooldown tracking."""
+"""Daily quota, cooldown, and global rate-limit tracking."""
 
 from __future__ import annotations
 
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 _QUOTA_FILE = "quotas.json"
+_RATE_KEY_PREFIX = "_rate_timestamps:"
+_RATE_WINDOW_SECONDS = 60.0
 
 
 def _today_key() -> str:
@@ -71,9 +73,50 @@ class QuotaTracker:
 
     def _prune(self) -> None:
         today = _today_key()
-        stale = [k for k in self._data if k != today]
+        stale = [
+            key
+            for key in self._data
+            if key != today and not key.startswith(_RATE_KEY_PREFIX)
+        ]
         for k in stale:
             del self._data[k]
+        now = time.time()
+        for key in self._data:
+            if key.startswith(_RATE_KEY_PREFIX):
+                self._rate_timestamps(key.removeprefix(_RATE_KEY_PREFIX), now)
+
+    def _rate_timestamps(self, command: str, now: float) -> list[float]:
+        key = f"{_RATE_KEY_PREFIX}{command}"
+        raw = self._data.get(key)
+        timestamps = raw if isinstance(raw, list) else []
+        active: list[float] = []
+        for timestamp in timestamps:
+            try:
+                value = float(timestamp)
+            except (TypeError, ValueError):
+                continue
+            if 0 <= now - value < _RATE_WINDOW_SECONDS:
+                active.append(value)
+        self._data[key] = active
+        return active
+
+    def _check_rate(
+        self,
+        command: str,
+        per_minute: int,
+        now: float,
+    ) -> QuotaResult | None:
+        if per_minute <= 0:
+            return None
+        used = len(self._rate_timestamps(command, now))
+        if used >= per_minute:
+            return QuotaResult(
+                allowed=False,
+                message=(
+                    f"/{command} 每分钟请求已达上限（{used}/{per_minute}），请稍后再试"
+                ),
+            )
+        return None
 
     def _entry(self, command: str, user_id: int) -> dict[str, Any]:
         self.ensure_loaded()
@@ -93,16 +136,23 @@ class QuotaTracker:
         user_id: int,
         daily_limit: int,
         cooldown: float,
+        per_minute: int,
         unlimited: bool = False,
     ) -> QuotaResult:
-        """Check without consuming. daily_limit/cooldown 0 = unlimited."""
+        """Check without consuming. A command rate limit applies to every user."""
+        now = time.time()
         if unlimited:
-            return QuotaResult(allowed=True, used=0, limit=0, remaining=-1)
+            rate_result = self._check_rate(command, per_minute, now)
+            return rate_result or QuotaResult(
+                allowed=True,
+                used=0,
+                limit=0,
+                remaining=-1,
+            )
 
         entry = self._entry(command, user_id)
         count = int(entry.get("count") or 0)
         last_ts = float(entry.get("last_ts") or 0.0)
-        now = time.time()
 
         if cooldown > 0 and last_ts > 0:
             elapsed = now - last_ts
@@ -128,6 +178,10 @@ class QuotaTracker:
                 remaining=0,
             )
 
+        rate_result = self._check_rate(command, per_minute, now)
+        if rate_result is not None:
+            return rate_result
+
         remaining = (daily_limit - count) if daily_limit > 0 else -1
         return QuotaResult(
             allowed=True,
@@ -141,14 +195,32 @@ class QuotaTracker:
         *,
         command: str,
         user_id: int,
+        daily_limit: int,
+        cooldown: float,
+        per_minute: int,
         unlimited: bool = False,
-    ) -> None:
-        if unlimited:
-            return
-        entry = self._entry(command, user_id)
-        entry["count"] = int(entry.get("count") or 0) + 1
-        entry["last_ts"] = time.time()
+    ) -> QuotaResult:
+        """Atomically recheck and reserve quota before a costly operation."""
+        result = self.check(
+            command=command,
+            user_id=user_id,
+            daily_limit=daily_limit,
+            cooldown=cooldown,
+            per_minute=per_minute,
+            unlimited=unlimited,
+        )
+        if not result.allowed:
+            return result
+
+        now = time.time()
+        if not unlimited:
+            entry = self._entry(command, user_id)
+            entry["count"] = int(entry.get("count") or 0) + 1
+            entry["last_ts"] = now
+        if per_minute > 0:
+            self._rate_timestamps(command, now).append(now)
         self.save()
+        return result
 
     def usage(self, command: str, user_id: int) -> tuple[int, float]:
         entry = self._entry(command, user_id)

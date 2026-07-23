@@ -189,6 +189,31 @@ class Config(BaseModel):
         ge=0,
         description="/imgsearch 日配额",
     )
+    acl_rate_limit_llm_per_minute: NonNegIntField = Field(
+        default=0,
+        ge=0,
+        description="/llm 滚动每分钟请求上限；0 表示不限制",
+    )
+    acl_rate_limit_draw_per_minute: NonNegIntField = Field(
+        default=0,
+        ge=0,
+        description="/draw 滚动每分钟请求上限；0 表示不限制",
+    )
+    acl_rate_limit_genai_per_minute: NonNegIntField = Field(
+        default=0,
+        ge=0,
+        description="/genai 滚动每分钟请求上限；0 表示不限制",
+    )
+    acl_rate_limit_eh_per_minute: NonNegIntField = Field(
+        default=0,
+        ge=0,
+        description="/eh 滚动每分钟请求上限；0 表示不限制",
+    )
+    acl_rate_limit_imgsearch_per_minute: NonNegIntField = Field(
+        default=0,
+        ge=0,
+        description="/imgsearch 滚动每分钟请求上限；0 表示不限制",
+    )
 
     # Cooldown seconds (0 = none)
     acl_cooldown_llm: NonNegFloatField = Field(

@@ -398,7 +398,14 @@ async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
     processing = await send_processing_reply(imgsearch, bot, event, "正在搜图，请稍候…")
     try:
         image, content_type = await _download_image(image_url)
-        consume_quota(event, "imgsearch")
+        quota = consume_quota(event, "imgsearch")
+        if not quota.allowed:
+            await finish_processing_reply(
+                imgsearch,
+                processing,
+                _reply(event, quota.message or "额度不足"),
+            )
+            return
         results, errors = await search_client.search(image, content_type)
         if not results and not errors:
             await finish_processing_reply(

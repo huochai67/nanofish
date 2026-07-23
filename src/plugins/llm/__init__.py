@@ -262,7 +262,10 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         llmmsg = (await parse_message(bot=bot, message=event.original_message)).build()
         logger.debug(f"[LLM]llmmsg: {llmmsg}")
 
-        consume_quota(event, "llm")
+        quota = consume_quota(event, "llm")
+        if not quota.allowed:
+            await llm.finish(quota.message or "额度不足", at_sender=True)
+            return
         retmsg = await openai(model=config.model, message=llmmsg)
         logger.debug(f"[LLM]retmsg: {retmsg}")
 
@@ -319,6 +322,12 @@ def _reply_to_event(event: MessageEvent, content: Message | str) -> Message:
     return MessageSegment.reply(event.message_id) + content
 
 
+async def _consume_draw_quota_or_finish(event: MessageEvent) -> None:
+    quota = consume_quota(event, "draw")
+    if not quota.allowed:
+        await draw.finish(quota.message or "额度不足", at_sender=True)
+
+
 @draw.handle()
 async def handle_draw(
     bot: Bot,
@@ -351,7 +360,7 @@ async def handle_draw(
         await draw.finish(_reply_to_event(event, "生图失败，请稍后重试"))
         return
 
-    consume_quota(event, "draw")
+    await _consume_draw_quota_or_finish(event)
     processing = await send_processing_reply(draw, bot, event, "正在生成图片，请稍候…")
     try:
         if image_urls:

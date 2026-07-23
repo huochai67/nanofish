@@ -123,7 +123,10 @@ async def handle_function(
     logger.info(f"searching {search}")
     processing = await send_processing_reply(ehsearch, bot, event, "正在搜索，请稍候…")
     try:
-        consume_quota(event, "eh")
+        quota = consume_quota(event, "eh")
+        if not quota.allowed:
+            await ehsearch.finish(quota.message or "额度不足")
+            return
         result = await ehapi.search(title=search, size=3)
         logger.debug(result)
 

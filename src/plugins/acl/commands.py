@@ -141,6 +141,11 @@ async def cmd_list(matcher: Matcher, config: Config) -> None:
     else:
         lines.append("群白名单: （不限制）")
     lines.append(f"私聊: {'允许' if config.acl_allow_private else '拒绝'}")
+    rate_limits = ", ".join(
+        f"{command}={getattr(config, f'acl_rate_limit_{command}_per_minute')}/分钟"
+        for command in ("llm", "draw", "genai", "eh", "imgsearch")
+    )
+    lines.append(f"高成本命令每分钟限流: {rate_limits}")
     perms = ", ".join(
         f"{c}={perm_for_command(c).label()}"
         for c in (

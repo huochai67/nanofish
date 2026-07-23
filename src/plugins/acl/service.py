@@ -17,12 +17,32 @@ from .store import acl_store
 
 config: Config = get_plugin_config(Config)
 
-_QUOTA_COMMANDS: dict[str, tuple[str, str]] = {
-    "llm": ("acl_quota_llm_daily", "acl_cooldown_llm"),
-    "draw": ("acl_quota_draw_daily", "acl_cooldown_draw"),
-    "genai": ("acl_quota_genai_daily", "acl_cooldown_genai"),
-    "eh": ("acl_quota_eh_daily", "acl_cooldown_eh"),
-    "imgsearch": ("acl_quota_imgsearch_daily", "acl_cooldown_imgsearch"),
+_QUOTA_COMMANDS: dict[str, tuple[str, str, str]] = {
+    "llm": (
+        "acl_quota_llm_daily",
+        "acl_cooldown_llm",
+        "acl_rate_limit_llm_per_minute",
+    ),
+    "draw": (
+        "acl_quota_draw_daily",
+        "acl_cooldown_draw",
+        "acl_rate_limit_draw_per_minute",
+    ),
+    "genai": (
+        "acl_quota_genai_daily",
+        "acl_cooldown_genai",
+        "acl_rate_limit_genai_per_minute",
+    ),
+    "eh": (
+        "acl_quota_eh_daily",
+        "acl_cooldown_eh",
+        "acl_rate_limit_eh_per_minute",
+    ),
+    "imgsearch": (
+        "acl_quota_imgsearch_daily",
+        "acl_cooldown_imgsearch",
+        "acl_rate_limit_imgsearch_per_minute",
+    ),
 }
 
 
@@ -128,28 +148,37 @@ def require_command(command: str) -> Permission:
 def check_quota(event: MessageEvent, command: str) -> QuotaResult:
     """Check quota/cooldown without consuming."""
     user_id = get_user_id(event)
-    if is_superuser(user_id):
-        return QuotaResult(allowed=True, used=0, limit=0, remaining=-1)
-
     specs = _QUOTA_COMMANDS.get(command)
     if specs is None:
         return QuotaResult(allowed=True, used=0, limit=0, remaining=-1)
 
-    daily_attr, cd_attr = specs
+    daily_attr, cd_attr, rate_attr = specs
     return quota_tracker.check(
         command=command,
         user_id=user_id,
         daily_limit=int(getattr(config, daily_attr)),
         cooldown=float(getattr(config, cd_attr)),
-        unlimited=False,
+        per_minute=int(getattr(config, rate_attr)),
+        unlimited=is_superuser(user_id),
     )
 
 
-def consume_quota(event: MessageEvent, command: str) -> None:
+def consume_quota(event: MessageEvent, command: str) -> QuotaResult:
+    """Atomically reserve quota before invoking a costly command."""
     user_id = get_user_id(event)
-    if is_superuser(user_id) or command not in _QUOTA_COMMANDS:
-        return
-    quota_tracker.consume(command=command, user_id=user_id, unlimited=False)
+    specs = _QUOTA_COMMANDS.get(command)
+    if specs is None:
+        return QuotaResult(allowed=True, used=0, limit=0, remaining=-1)
+
+    daily_attr, cd_attr, rate_attr = specs
+    return quota_tracker.consume(
+        command=command,
+        user_id=user_id,
+        daily_limit=int(getattr(config, daily_attr)),
+        cooldown=float(getattr(config, cd_attr)),
+        per_minute=int(getattr(config, rate_attr)),
+        unlimited=is_superuser(user_id),
+    )
 
 
 def ensure_quota(event: MessageEvent, command: str) -> str | None:
@@ -157,8 +186,7 @@ def ensure_quota(event: MessageEvent, command: str) -> str | None:
     Check quota; if allowed, consume one use and return None.
     If denied, return user-facing message (do not consume).
     """
-    result = check_quota(event, command)
+    result = consume_quota(event, command)
     if not result.allowed:
         return result.message or "额度不足"
-    consume_quota(event, command)
     return None

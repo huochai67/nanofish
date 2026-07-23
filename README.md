@@ -14,7 +14,7 @@ docker/          # 容器启动脚本
 
 | 插件 | 命令 | 说明 |
 |------|------|------|
-| `acl` | `/auth` | 角色权限、群范围、日配额/冷却、运行时授权 |
+| `acl` | `/auth` | 角色权限、群范围、日配额/冷却、每命令限流、运行时授权 |
 | `llm` | `/llm`、`/draw` | 多模态对话（截图回传）；OpenAI 兼容文生图/图生图（默认 user + 日配额） |
 | `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入） |
 | `ehsearch` | `/eh <书名>` 或回复后 `/eh` | E-Hentai 搜索，结果 HTML 截图回传（默认 admin + 配额） |
@@ -50,6 +50,10 @@ docker/          # 容器启动脚本
 - `/genai` 默认 20 次/日、冷却 10s
 - `/eh` 默认 20 次/日、冷却 10s
 - `/imgsearch` 默认 20 次/日、冷却 10s
+
+每命令限流：
+
+- `ACL_RATE_LIMIT_<COMMAND>_PER_MINUTE` 为对应高成本命令跨所有用户共享的滚动 60 秒请求上限；`0` 表示关闭，superuser 也计入。
 
 常用管理：
 

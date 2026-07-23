@@ -37,6 +37,12 @@ AI_LIKELY_THRESHOLD = 0.8
 AI_UNLIKELY_THRESHOLD = 0.2
 
 
+async def _consume_quota_or_finish(event: MessageEvent) -> None:
+    quota = consume_quota(event, "genai")
+    if not quota.allowed:
+        await genai.finish(quota.message or "额度不足")
+
+
 @genai.handle()
 async def handle_function(bot: Bot, event: MessageEvent) -> None:
     quota = check_quota(event, "genai")
@@ -53,7 +59,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
 
     processing = await send_processing_reply(genai, bot, event, "正在检测图片，请稍候…")
     try:
-        consume_quota(event, "genai")
+        await _consume_quota_or_finish(event)
         req = await http_get(
             "https://api.sightengine.com/1.0/check.json",
             params={
