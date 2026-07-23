@@ -22,8 +22,7 @@ docker/          # 容器启动脚本
 | `genai_detect` | `/genai` | AI 生成图片检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |
-| `nonebot_plugin_parser` | 自动解析支持平台链接、`/bm` | 核心链接解析（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
-| `parser_acl` | — | 在解析插件执行前应用 Nanofish ACL 策略 |
+| `nonebot_plugin_parser` | 自动解析支持平台链接、`/bm` | 前端主题卡片预览与媒体回传（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
 | `utils` | — | 共享消息解析工具 |
 
 ### 权限（acl）

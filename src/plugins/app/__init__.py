@@ -3,7 +3,7 @@ import atexit
 import base64
 import json
 import threading
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Literal, Self
 
 from nonebot import get_driver, get_plugin_config, logger
 from nonebot.adapters.onebot.v11.message import Message
@@ -84,9 +84,34 @@ class Client:
         data: dict[str, Any],
     ) -> str:
         """Open a frontend page with window.<global_name> injected, then screenshot."""
+        image_bytes = await self._shoot_with_data(
+            path,
+            global_name,
+            data,
+            image_type="jpeg",
+        )
+        return base64.b64encode(image_bytes).decode("utf-8")
+
+    async def _shoot_with_data(
+        self,
+        path: str,
+        global_name: str,
+        data: dict[str, Any],
+        *,
+        image_type: Literal["jpeg", "png"],
+        viewport_width: int | None = None,
+        target_selector: str | None = None,
+    ) -> bytes:
         context = await self.get_context()
         page = await context.new_page()
         try:
+            if viewport_width is not None:
+                await page.set_viewport_size(
+                    {
+                        "width": viewport_width,
+                        "height": config.app_viewport_height,
+                    }
+                )
             # inject before any page JS so React reads data on first mount
             await page.add_init_script(
                 f"window.{global_name} = {json.dumps(data, ensure_ascii=False)};"
@@ -113,8 +138,11 @@ class Client:
                     "}"
                 )
             )
-            image_bytes = await page.screenshot(type="jpeg", full_page=True)
-            return base64.b64encode(image_bytes).decode("utf-8")
+            if target_selector is not None:
+                target = page.locator(target_selector)
+                await target.wait_for(state="visible", timeout=config.app_page_timeout_ms)
+                return await target.screenshot(type=image_type)
+            return await page.screenshot(type=image_type, full_page=True)
         finally:
             await page.close()
 
@@ -127,6 +155,16 @@ class Client:
     async def shoot_imgsearch(self, imgsearch_data: dict[str, Any]) -> str:
         return await self.shoot_with_data(
             "/imgsearch", "__IMGSEARCH_DATA__", imgsearch_data
+        )
+
+    async def shoot_parser(self, parser_data: dict[str, Any]) -> bytes:
+        return await self._shoot_with_data(
+            "/parser",
+            "__PARSER_DATA__",
+            parser_data,
+            image_type="png",
+            viewport_width=800,
+            target_selector="[data-parser-card]",
         )
 
     async def close(self) -> None:
@@ -231,3 +269,7 @@ async def app_imgsearch_image_b64(imgsearch_data: dict[str, Any]) -> str:
 async def app_imgsearch_image_cq(imgsearch_data: dict[str, Any]) -> Message:
     base64img = await app_imgsearch_image_b64(imgsearch_data)
     return Message(f"[CQ:image,file=base64://{base64img}]")
+
+
+async def app_parser_image(parser_data: dict[str, Any]) -> bytes:
+    return await client.shoot_parser(parser_data)

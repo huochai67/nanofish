@@ -10,11 +10,13 @@ import {
   ArrowRight,
   FlaskConical,
   Search,
+  Clapperboard,
 } from "lucide-react";
 import { Card } from "@heroui/react";
 import { MockChatData } from "./chat/types";
 import { MockEhData } from "./eh/types";
 import { MockImageSearchData } from "./imgsearch/types";
+import { MockParserData } from "./parser/types";
 
 type PageEntry = {
   href: string;
@@ -67,6 +69,19 @@ const PAGES: PageEntry[] = [
     iconBg: "bg-cyan-700",
     mockSummary: `${MockImageSearchData.results.length} 条匹配结果`,
     mockPreview: MockImageSearchData,
+    supportsDataQuery: true,
+  },
+  {
+    href: "/parser",
+    title: "链接解析卡片",
+    description:
+      "多平台链接解析截图页，展示来源、作者、正文与媒体内容。",
+    injectKey: "__PARSER_DATA__",
+    icon: <Clapperboard size={22} />,
+    accent: "from-sky-500 to-blue-600",
+    iconBg: "bg-sky-600",
+    mockSummary: `${MockParserData.result.platform.displayName} · ${MockParserData.result.contentType ?? "动态"}`,
+    mockPreview: MockParserData,
     supportsDataQuery: true,
   },
 ];

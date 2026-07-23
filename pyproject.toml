@@ -12,7 +12,16 @@ dependencies = [
     "nonebot-plugin-localstore>=0.7.4",
     "openai>=2.21.0",
     "playwright>=1.58.0",
-    "nonebot-plugin-parser>=2.6.6,<3.0.0",
+    "aiofiles>=25.1.0",
+    "beautifulsoup4>=4.12.0,<5.0.0",
+    "bilibili-api-python>=17.4.2,<18.0.0",
+    "curl-cffi>=0.13.0,!=0.14.0,<1.0.0",
+    "msgspec>=0.20.0,<1.0.0",
+    "nonebot-plugin-alconna>=0.60.4,<1.0.0",
+    "nonebot-plugin-apscheduler>=0.5.0,<1.0.0",
+    "nonebot-plugin-uninfo>=0.10.1,<1.0.0",
+    "pillow>=11.0.0",
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]
@@ -33,10 +42,11 @@ nonebot-adapter-onebot = [
 [tool.nonebot.plugins]
 "@local" = []
 nonebot-plugin-localstore = ["nonebot_plugin_localstore"]
-nonebot-plugin-parser = ["nonebot_plugin_parser"]
 [tool.ruff]
 line-length = 88
 target-version = "py311"
+# Third-party source is vendored for local customization, not restyled to this project.
+extend-exclude = ["src/plugins/nonebot_plugin_parser"]
 
 [tool.ruff.format]
 line-ending = "lf"
@@ -114,6 +124,7 @@ keep-runtime-typing = true
 pythonVersion = "3.11"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
+exclude = ["src/plugins/nonebot_plugin_parser"]
 
 [dependency-groups]
 dev = [

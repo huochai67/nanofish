@@ -43,26 +43,6 @@ wheels = [
 ]
 
 [[package]]
-name = "apilmoji"
-version = "0.3.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiofiles" },
-    { name = "emoji" },
-    { name = "httpx" },
-    { name = "pillow" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/2a/7f/b6aa1676273195ded802af383d07328d9e751419a33ea59666481ba606dc/apilmoji-0.3.1.tar.gz", hash = "sha256:1490d0076e0b47bfb1b14bef9733a4d23181f54d8ecb212604f5ec0e11127428", size = 8604, upload-time = "2026-02-26T05:15:50.928Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/37/41/48460d135db4be801fbb4840f60f4671b41cc5043f6c1d48a6cbeb91f4b5/apilmoji-0.3.1-py3-none-any.whl", hash = "sha256:305ec445d19b1cd11f21e07cf1d2bd9f3ae5be9fc688a6589f823dd67428da15", size = 9175, upload-time = "2026-02-26T05:15:49.906Z" },
-]
-
-[package.optional-dependencies]
-rich = [
-    { name = "rich" },
-]
-
-[[package]]
 name = "apscheduler"
 version = "3.11.3"
 source = { registry = "https://pypi.org/simple" }
@@ -544,15 +524,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/fc/f8/98eea607f65de6527f8a2e8885fc8015d3e6f5775df186e443e0964a11c3/distro-1.9.0.tar.gz", hash = "sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed", size = 60722, upload-time = "2023-12-24T09:54:32.31Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/12/b3/231ffd4ab1fc9d679809f356cebee130ac7daa00d6d6f3206dd4fd137e9e/distro-1.9.0-py3-none-any.whl", hash = "sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2", size = 20277, upload-time = "2023-12-24T09:54:30.421Z" },
-]
-
-[[package]]
-name = "emoji"
-version = "2.15.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a2/78/0d2db9382c92a163d7095fc08efff7800880f830a152cfced40161e7638d/emoji-2.15.0.tar.gz", hash = "sha256:eae4ab7d86456a70a00a985125a03263a5eac54cd55e51d7e184b1ed3b6757e4", size = 615483, upload-time = "2025-09-21T12:13:02.755Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e1/5e/4b5aaaabddfacfe36ba7768817bd1f71a7a810a43705e531f3ae4c690767/emoji-2.15.0-py3-none-any.whl", hash = "sha256:205296793d66a89d88af4688fa57fd6496732eb48917a87175a023c8138995eb", size = 608433, upload-time = "2025-09-21T12:13:01.197Z" },
 ]
 
 [[package]]
@@ -1297,13 +1268,22 @@ name = "nanofish"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aiofiles" },
+    { name = "beautifulsoup4" },
+    { name = "bilibili-api-python" },
+    { name = "curl-cffi" },
     { name = "httpx" },
+    { name = "msgspec" },
     { name = "nonebot-adapter-onebot" },
+    { name = "nonebot-plugin-alconna" },
+    { name = "nonebot-plugin-apscheduler" },
     { name = "nonebot-plugin-localstore" },
-    { name = "nonebot-plugin-parser" },
+    { name = "nonebot-plugin-uninfo" },
     { name = "nonebot2", extra = ["fastapi", "websockets"] },
     { name = "openai" },
+    { name = "pillow" },
     { name = "playwright" },
+    { name = "rich" },
 ]
 
 [package.optional-dependencies]
@@ -1319,15 +1299,24 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiofiles", specifier = ">=25.1.0" },
+    { name = "beautifulsoup4", specifier = ">=4.12.0,<5.0.0" },
+    { name = "bilibili-api-python", specifier = ">=17.4.2,<18.0.0" },
+    { name = "curl-cffi", specifier = ">=0.13.0,!=0.14.0,<1.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "msgspec", specifier = ">=0.20.0,<1.0.0" },
     { name = "nonebot-adapter-onebot", specifier = ">=2.4.6" },
+    { name = "nonebot-plugin-alconna", specifier = ">=0.60.4,<1.0.0" },
+    { name = "nonebot-plugin-apscheduler", specifier = ">=0.5.0,<1.0.0" },
     { name = "nonebot-plugin-localstore", specifier = ">=0.7.4" },
-    { name = "nonebot-plugin-parser", specifier = ">=2.6.6,<3.0.0" },
+    { name = "nonebot-plugin-uninfo", specifier = ">=0.10.1,<1.0.0" },
     { name = "nonebot2", extras = ["fastapi"], specifier = ">=2.5.0,<3.0.0" },
     { name = "nonebot2", extras = ["websockets"], specifier = ">=2.5.0,<3.0.0" },
     { name = "openai", specifier = ">=2.21.0" },
+    { name = "pillow", specifier = ">=11.0.0" },
     { name = "playwright", specifier = ">=1.58.0" },
     { name = "pyright", extras = ["nodejs"], marker = "extra == 'dev'" },
+    { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["dev"]
@@ -1478,31 +1467,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/63/22/67ec1e604c0385729bf2d71db406c032de9015363588785617113dfb76ac/nonebot_plugin_localstore-0.7.4.tar.gz", hash = "sha256:85ddc13814bfcd484ab311306823651390020bf44f4fb4733b343a58e72723ce", size = 5535, upload-time = "2025-03-01T12:54:04.077Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7b/c8/0fcb2c6d994579e53342cbf11bf9326ddfab010d1a8063e1fc0cc19c13bf/nonebot_plugin_localstore-0.7.4-py3-none-any.whl", hash = "sha256:3b08030878eadcdd8b9ce3d079da0dc2d0e41dc91f0b2d8cf7fa862a27de9090", size = 6963, upload-time = "2025-03-01T12:54:02.137Z" },
-]
-
-[[package]]
-name = "nonebot-plugin-parser"
-version = "2.6.6"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiofiles" },
-    { name = "apilmoji", extra = ["rich"] },
-    { name = "beautifulsoup4" },
-    { name = "bilibili-api-python" },
-    { name = "curl-cffi" },
-    { name = "httpx" },
-    { name = "msgspec" },
-    { name = "nonebot-plugin-alconna" },
-    { name = "nonebot-plugin-apscheduler" },
-    { name = "nonebot-plugin-localstore" },
-    { name = "nonebot-plugin-uninfo" },
-    { name = "nonebot2" },
-    { name = "pillow" },
-    { name = "rich" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a2/57/9902a59cc13071f2b9b6a4816ae43482e158cd53d2d67efd6a62526e15b0/nonebot_plugin_parser-2.6.6.tar.gz", hash = "sha256:cc89437482dbdc9b0c94ea1169f6bd4266c61fa9b98d9a0abe60133d636d98ae", size = 2884505, upload-time = "2026-06-25T11:34:07.98Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b9/ef/6e6681d05612c1fe3c64d4bfa4b384cc3485209703a5a6b2b340117d8891/nonebot_plugin_parser-2.6.6-py3-none-any.whl", hash = "sha256:91fb7f12419f933230d63d8506531915ee8b55465094cb0beb412558c229e0df", size = 2911338, upload-time = "2026-06-25T11:34:06.539Z" },
 ]
 
 [[package]]
