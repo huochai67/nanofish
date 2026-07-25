@@ -11,7 +11,9 @@ from nonebot.plugin import PluginMetadata
 from src.plugin_config import get_yaml_plugin_config
 
 require("nonebot_plugin_localstore")
+require("utils")
 
+from ..utils import reply_to_event
 from . import commands as auth_cmds
 from .config import Config
 from .quota import quota_tracker
@@ -73,26 +75,26 @@ async def _dispatch_auth(
         await auth_cmds.cmd_quota(matcher, event, rest)
         return
     if sub == "help":
-        await auth_cmds.cmd_help(matcher)
+        await auth_cmds.cmd_help(matcher, event)
         return
 
     if not auth_cmds.can_manage(event, config):
         if scope_allows(event):
-            await matcher.finish("权限不足")
+            await matcher.finish(reply_to_event(event, "权限不足"))
         await matcher.finish()
         return
 
     managed = {
-        "list": lambda: auth_cmds.cmd_list(matcher, config),
+        "list": lambda: auth_cmds.cmd_list(matcher, event, config),
         "set": lambda: auth_cmds.cmd_set(matcher, event, rest),
-        "unset": lambda: auth_cmds.cmd_unset(matcher, rest),
-        "ban": lambda: auth_cmds.cmd_ban(matcher, rest),
-        "unban": lambda: auth_cmds.cmd_unban(matcher, rest),
+        "unset": lambda: auth_cmds.cmd_unset(matcher, event, rest),
+        "ban": lambda: auth_cmds.cmd_ban(matcher, event, rest),
+        "unban": lambda: auth_cmds.cmd_unban(matcher, event, rest),
         "group": lambda: auth_cmds.cmd_group(matcher, event, rest),
     }
     handler = managed.get(sub)
     if handler is None:
-        await matcher.finish("未知子命令，发送 /auth help")
+        await matcher.finish(reply_to_event(event, "未知子命令，发送 /auth help"))
         return
     await handler()
 

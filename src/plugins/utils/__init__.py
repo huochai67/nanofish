@@ -77,6 +77,11 @@ async def get_reply(bot: Bot, msg: Message) -> dict | None:
     return await bot.get_msg(message_id=message_id)
 
 
+def reply_to_event(event: MessageEvent, content: Message | str) -> Message:
+    """Build a message that quotes the triggering event."""
+    return MessageSegment.reply(event.message_id) + content
+
+
 @dataclass(frozen=True, slots=True)
 class ProcessingReply:
     """A temporary acknowledgement that is removed after the final response."""
@@ -114,20 +119,21 @@ async def send_processing_reply(
     text: str,
 ) -> ProcessingReply:
     """Reply to a request immediately and retain the acknowledgement message id."""
-    result = await matcher.send(MessageSegment.reply(event.message_id) + text)
+    result = await matcher.send(reply_to_event(event, text))
     return ProcessingReply(bot=bot, message_id=_sent_message_id(result))
 
 
 async def finish_processing_reply(
     matcher: Matcher,
     processing: ProcessingReply,
+    event: MessageEvent,
     message: Message | str,
     *,
     at_sender: bool = False,
 ) -> NoReturn:
     """Send the final response before retracting its temporary acknowledgement."""
     try:
-        await matcher.send(message, at_sender=at_sender)
+        await matcher.send(reply_to_event(event, message), at_sender=at_sender)
     finally:
         await processing.retract()
     await matcher.finish()
@@ -150,6 +156,7 @@ __all__ = [
     "http_get",
     "http_post",
     "log_http_trace",
+    "reply_to_event",
     "request_error_message",
     "send_processing_reply",
 ]

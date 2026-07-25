@@ -83,7 +83,7 @@ async def parser_handler(
 
     # 3. 渲染内容消息并发送
     async for message in deliver_parse_result(result):
-        await message.send()
+        await UniHelper.reply_to_current_event(message).send()
 
     # 4. 缓存解析结果
     _RESULT_CACHE[cache_key] = result
@@ -95,7 +95,7 @@ async def _(message: Message = CommandArg()):
     text = message.extract_plain_text()
     matched = re.search(r"(BV[A-Za-z0-9]{10})(\s\d{1,3})?", text)
     if not matched:
-        await UniMessage("请发送正确的 BV 号").finish()
+        await UniHelper.reply_to_current_event("请发送正确的 BV 号").finish()
 
     bvid, page_num = matched.group(1), matched.group(2)
     page_idx = int(page_num) - 1 if page_num else 0
@@ -104,15 +104,19 @@ async def _(message: Message = CommandArg()):
 
     _, audio_url = await parser.extract_download_urls(bvid=bvid, page_index=page_idx)
     if not audio_url:
-        await UniMessage("未找到可下载的音频").finish()
+        await UniHelper.reply_to_current_event("未找到可下载的音频").finish()
 
     audio_path = await parser.downloader.download_audio(
         audio_url, audio_name=f"{bvid}-{page_idx}.mp3", ext_headers=parser.headers
     )
-    await UniMessage(UniHelper.record_seg(audio_path)).send()
+    await UniHelper.reply_to_current_event(
+        UniMessage(UniHelper.record_seg(audio_path))
+    ).send()
 
     if pconfig.need_upload:
-        await UniMessage(UniHelper.file_seg(audio_path)).send()
+        await UniHelper.reply_to_current_event(
+            UniMessage(UniHelper.file_seg(audio_path))
+        ).send()
 
 
 from ..download import yt_dlp_downloader
@@ -127,12 +131,16 @@ if yt_dlp_downloader is not None:
         parser = get_parser_by_type(YouTubeParser)
         _, matched = parser.search_url(text)
         if not matched:
-            await UniMessage("请发送正确的油管链接").finish()
+            await UniHelper.reply_to_current_event("请发送正确的油管链接").finish()
 
         url = matched.group(0)
 
         audio_path = await yt_dlp_downloader.download_audio(url, parser.cookie_file)
-        await UniMessage(UniHelper.record_seg(audio_path)).send()
+        await UniHelper.reply_to_current_event(
+            UniMessage(UniHelper.record_seg(audio_path))
+        ).send()
 
         if pconfig.need_upload:
-            await UniMessage(UniHelper.file_seg(audio_path)).send()
+            await UniHelper.reply_to_current_event(
+                UniMessage(UniHelper.file_seg(audio_path))
+            ).send()

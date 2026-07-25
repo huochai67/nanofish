@@ -26,6 +26,7 @@ from ..utils import (
     get_plaintext,
     get_reply,
     http_get,
+    reply_to_event,
     send_processing_reply,
 )
 
@@ -114,12 +115,14 @@ async def handle_function(
 ) -> None:
     quota = check_quota(event, "eh")
     if not quota.allowed:
-        await ehsearch.finish(quota.message or "额度不足")
+        await ehsearch.finish(reply_to_event(event, quota.message or "额度不足"))
         return
 
     search = await resolve_search_query(bot, event, arg)
     if not search:
-        await ehsearch.finish("用法: /eh <书名>，或回复一条含书名的消息后发送 /eh")
+        await ehsearch.finish(
+            reply_to_event(event, "用法: /eh <书名>，或回复一条含书名的消息后发送 /eh")
+        )
         return
 
     logger.info(f"searching {search}")
@@ -127,29 +130,30 @@ async def handle_function(
     try:
         quota = consume_quota(event, "eh")
         if not quota.allowed:
-            await ehsearch.finish(quota.message or "额度不足")
+            await ehsearch.finish(reply_to_event(event, quota.message or "额度不足"))
             return
         result = await ehapi.search(title=search, size=3)
         logger.debug(result)
 
         if not result:
-            await finish_processing_reply(ehsearch, processing, "未找到相关结果")
+            await finish_processing_reply(ehsearch, processing, event, "未找到相关结果")
             return
 
         payload = await build_eh_payload(search, result)
         image = await app_eh_image_cq(payload)
-        await finish_processing_reply(ehsearch, processing, image)
+        await finish_processing_reply(ehsearch, processing, event, image)
     except FinishedException:
         raise
     except HttpRequestError as e:
         logger.warning(f"ehsearch request error: {e}")
-        await finish_processing_reply(ehsearch, processing, e.message)
+        await finish_processing_reply(ehsearch, processing, event, e.message)
         return
     except Exception as e:  # noqa: BLE001
         logger.exception("ehsearch unexpected error")
         await finish_processing_reply(
             ehsearch,
             processing,
+            event,
             f"处理失败: {type(e).__name__}: {e}",
         )
         return

@@ -7,6 +7,7 @@ import re
 from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent
 from nonebot.matcher import Matcher
 
+from ..utils import reply_to_event
 from .config import Config
 from .roles import Role
 from .service import (
@@ -75,38 +76,43 @@ async def cmd_whoami(matcher: Matcher, event: MessageEvent) -> None:
             lines.append(f"/{cmd} 今日 {q.used}/{q.limit}")
         elif is_superuser(uid):
             lines.append(f"/{cmd} 无限制")
-    await matcher.finish("\n".join(lines))
+    await matcher.finish(reply_to_event(event, "\n".join(lines)))
 
 
 async def cmd_quota(matcher: Matcher, event: MessageEvent, rest: list[str]) -> None:
     cmd = rest[0].lower() if rest else "llm"
     if cmd not in {"llm", "draw", "genai", "eh", "imgsearch"}:
-        await matcher.finish("用法: /auth quota [llm|draw|genai|eh|imgsearch]")
+        await matcher.finish(
+            reply_to_event(event, "用法: /auth quota [llm|draw|genai|eh|imgsearch]")
+        )
         return
     q = check_quota(event, cmd)
     if is_superuser(get_user_id(event)):
-        await matcher.finish(f"/{cmd}: superuser 无限制")
+        await matcher.finish(reply_to_event(event, f"/{cmd}: superuser 无限制"))
         return
     if q.limit <= 0:
-        await matcher.finish(f"/{cmd}: 未设置日配额")
+        await matcher.finish(reply_to_event(event, f"/{cmd}: 未设置日配额"))
         return
-    await matcher.finish(f"/{cmd} 今日已用 {q.used}/{q.limit}")
+    await matcher.finish(reply_to_event(event, f"/{cmd} 今日已用 {q.used}/{q.limit}"))
 
 
-async def cmd_help(matcher: Matcher) -> None:
+async def cmd_help(matcher: Matcher, event: MessageEvent) -> None:
     await matcher.finish(
-        "用法:\n"
-        "/auth whoami\n"
-        "/auth quota [llm|draw|genai|eh|imgsearch]\n"
-        "/auth list\n"
-        "/auth set <qq|@> <guest|user|admin>\n"
-        "/auth unset <qq|@>\n"
-        "/auth ban|unban <qq|@>\n"
-        "/auth group enable|disable|reset [群号]"
+        reply_to_event(
+            event,
+            "用法:\n"
+            "/auth whoami\n"
+            "/auth quota [llm|draw|genai|eh|imgsearch]\n"
+            "/auth list\n"
+            "/auth set <qq|@> <guest|user|admin>\n"
+            "/auth unset <qq|@>\n"
+            "/auth ban|unban <qq|@>\n"
+            "/auth group enable|disable|reset [群号]",
+        )
     )
 
 
-async def cmd_list(matcher: Matcher, config: Config) -> None:
+async def cmd_list(matcher: Matcher, event: MessageEvent, config: Config) -> None:
     lines = ["ACL 状态"]
     if config.acl_admins:
         lines.append("env admins: " + ", ".join(str(x) for x in config.acl_admins))
@@ -160,7 +166,7 @@ async def cmd_list(matcher: Matcher, config: Config) -> None:
         )
     )
     lines.append(f"命令门槛: {perms}")
-    await matcher.finish("\n".join(lines))
+    await matcher.finish(reply_to_event(event, "\n".join(lines)))
 
 
 async def cmd_set(
@@ -169,70 +175,74 @@ async def cmd_set(
     rest: list[str],
 ) -> None:
     if len(rest) < _SET_ARGS_MIN:
-        await matcher.finish("用法: /auth set <qq|@> <guest|user|admin>")
+        await matcher.finish(
+            reply_to_event(event, "用法: /auth set <qq|@> <guest|user|admin>")
+        )
         return
     uid = parse_target_uid(rest[0])
     if uid is None:
-        await matcher.finish("无法解析目标 QQ")
+        await matcher.finish(reply_to_event(event, "无法解析目标 QQ"))
         return
     try:
         role = Role.parse(rest[1])
     except ValueError as e:
-        await matcher.finish(str(e))
+        await matcher.finish(reply_to_event(event, str(e)))
         return
     if role not in _VALID_SET_ROLES:
         await matcher.finish(
-            "只能设置 guest/user/admin（superuser 请用 .env SUPERUSERS）"
+            reply_to_event(
+                event, "只能设置 guest/user/admin（superuser 请用 .env SUPERUSERS）"
+            )
         )
         return
     actor = get_user_id(event)
     if is_superuser(uid) and not is_superuser(actor):
-        await matcher.finish("不能修改 superuser")
+        await matcher.finish(reply_to_event(event, "不能修改 superuser"))
         return
     if not is_superuser(actor) and role is Role.ADMIN:
-        await matcher.finish("只有 superuser 可授予 admin")
+        await matcher.finish(reply_to_event(event, "只有 superuser 可授予 admin"))
         return
     acl_store.set_user_role(uid, role)
-    await matcher.finish(f"已设置 {uid} -> {role.label()}")
+    await matcher.finish(reply_to_event(event, f"已设置 {uid} -> {role.label()}"))
 
 
-async def cmd_unset(matcher: Matcher, rest: list[str]) -> None:
+async def cmd_unset(matcher: Matcher, event: MessageEvent, rest: list[str]) -> None:
     if not rest:
-        await matcher.finish("用法: /auth unset <qq|@>")
+        await matcher.finish(reply_to_event(event, "用法: /auth unset <qq|@>"))
         return
     uid = parse_target_uid(rest[0])
     if uid is None:
-        await matcher.finish("无法解析目标 QQ")
+        await matcher.finish(reply_to_event(event, "无法解析目标 QQ"))
         return
     acl_store.set_user_role(uid, None)
-    await matcher.finish(f"已清除 {uid} 的角色覆盖")
+    await matcher.finish(reply_to_event(event, f"已清除 {uid} 的角色覆盖"))
 
 
-async def cmd_ban(matcher: Matcher, rest: list[str]) -> None:
+async def cmd_ban(matcher: Matcher, event: MessageEvent, rest: list[str]) -> None:
     if not rest:
-        await matcher.finish("用法: /auth ban <qq|@>")
+        await matcher.finish(reply_to_event(event, "用法: /auth ban <qq|@>"))
         return
     uid = parse_target_uid(rest[0])
     if uid is None:
-        await matcher.finish("无法解析目标 QQ")
+        await matcher.finish(reply_to_event(event, "无法解析目标 QQ"))
         return
     if is_superuser(uid):
-        await matcher.finish("不能拉黑 superuser")
+        await matcher.finish(reply_to_event(event, "不能拉黑 superuser"))
         return
     acl_store.ban(uid)
-    await matcher.finish(f"已拉黑 {uid}")
+    await matcher.finish(reply_to_event(event, f"已拉黑 {uid}"))
 
 
-async def cmd_unban(matcher: Matcher, rest: list[str]) -> None:
+async def cmd_unban(matcher: Matcher, event: MessageEvent, rest: list[str]) -> None:
     if not rest:
-        await matcher.finish("用法: /auth unban <qq|@>")
+        await matcher.finish(reply_to_event(event, "用法: /auth unban <qq|@>"))
         return
     uid = parse_target_uid(rest[0])
     if uid is None:
-        await matcher.finish("无法解析目标 QQ")
+        await matcher.finish(reply_to_event(event, "无法解析目标 QQ"))
         return
     acl_store.unban(uid)
-    await matcher.finish(f"已解除拉黑 {uid}")
+    await matcher.finish(reply_to_event(event, f"已解除拉黑 {uid}"))
 
 
 async def cmd_group(
@@ -241,11 +251,15 @@ async def cmd_group(
     rest: list[str],
 ) -> None:
     if not rest:
-        await matcher.finish("用法: /auth group enable|disable|reset [群号]")
+        await matcher.finish(
+            reply_to_event(event, "用法: /auth group enable|disable|reset [群号]")
+        )
         return
     action = rest[0].lower()
     if action not in {"enable", "disable", "reset"}:
-        await matcher.finish("用法: /auth group enable|disable|reset [群号]")
+        await matcher.finish(
+            reply_to_event(event, "用法: /auth group enable|disable|reset [群号]")
+        )
         return
     gid: int | None = None
     if len(rest) >= _GROUP_ARGS_WITH_ID and rest[1].isdigit():
@@ -253,15 +267,15 @@ async def cmd_group(
     elif isinstance(event, GroupMessageEvent):
         gid = int(event.group_id)
     if gid is None:
-        await matcher.finish("请指定群号，或在群内执行")
+        await matcher.finish(reply_to_event(event, "请指定群号，或在群内执行"))
         return
     if action == "enable":
         acl_store.set_group_enabled(gid, enabled=True)
-        await matcher.finish(f"群 {gid} 已启用（覆盖）")
+        await matcher.finish(reply_to_event(event, f"群 {gid} 已启用（覆盖）"))
         return
     if action == "disable":
         acl_store.set_group_enabled(gid, enabled=False)
-        await matcher.finish(f"群 {gid} 已禁用")
+        await matcher.finish(reply_to_event(event, f"群 {gid} 已禁用"))
         return
     acl_store.set_group_enabled(gid, enabled=None)
-    await matcher.finish(f"群 {gid} 已恢复全局策略")
+    await matcher.finish(reply_to_event(event, f"群 {gid} 已恢复全局策略"))

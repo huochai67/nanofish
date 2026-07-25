@@ -41,6 +41,12 @@ ID_ADAPTERS = {
 
 
 class UniHelper:
+    @classmethod
+    def reply_to_current_event(cls, message: UniMessage[Any] | str) -> UniMessage[Any]:
+        """Build a message that quotes the event currently being handled."""
+        message_id = uniseg.get_message_id(current_event.get())
+        return UniMessage.reply(str(message_id)) + message
+
     @staticmethod
     def construct_forward_message(
         segments: Sequence[ForwardNodeInner],
@@ -139,7 +145,9 @@ class UniHelper:
         try:
             await uniseg.message_reaction(emoji, message_id=message_id)
         except Exception:
-            logger.opt(exception=True).warning(f"reaction {emoji} to {message_id} failed, maybe not support")
+            logger.opt(exception=True).warning(
+                f"reaction {emoji} to {message_id} failed, maybe not support"
+            )
 
     @classmethod
     def with_reaction(cls, func: Callable[..., Awaitable[Any]]):
@@ -153,7 +161,7 @@ class UniHelper:
             try:
                 result = await func(*args, **kwargs)
             except TipException as e:
-                await UniMessage(e.message).send()
+                await cls.reply_to_current_event(e.message).send()
                 await cls.message_reaction(event, "fail")
                 return None
             except Exception:

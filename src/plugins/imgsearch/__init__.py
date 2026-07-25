@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from nonebot import logger, on_command, require
-from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, MessageEvent
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
@@ -28,6 +28,7 @@ from ..utils import (
     get_reply,
     http_get,
     http_post,
+    reply_to_event,
     send_processing_reply,
 )
 
@@ -379,21 +380,19 @@ def _build_payload(
     }
 
 
-def _reply(event: MessageEvent, content: str) -> Message:
-    return MessageSegment.reply(event.message_id) + content
-
-
 @imgsearch.handle()
 async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
     quota = check_quota(event, "imgsearch")
     if not quota.allowed:
-        await imgsearch.finish(quota.message or "额度不足")
+        await imgsearch.finish(reply_to_event(event, quota.message or "额度不足"))
         return
 
     image_url = await _resolve_image_url(bot, event)
     if not image_url:
         await imgsearch.finish(
-            "用法: /imgsearch 后附图，或回复一张图片后发送 /imgsearch"
+            reply_to_event(
+                event, "用法: /imgsearch 后附图，或回复一张图片后发送 /imgsearch"
+            )
         )
         return
 
@@ -405,7 +404,8 @@ async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
             await finish_processing_reply(
                 imgsearch,
                 processing,
-                _reply(event, quota.message or "额度不足"),
+                event,
+                quota.message or "额度不足",
             )
             return
         results, errors = await search_client.search(image, content_type)
@@ -413,7 +413,8 @@ async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
             await finish_processing_reply(
                 imgsearch,
                 processing,
-                _reply(event, "未找到匹配结果"),
+                event,
+                "未找到匹配结果",
             )
             return
         try:
@@ -427,19 +428,21 @@ async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
             await finish_processing_reply(
                 imgsearch,
                 processing,
-                _reply(event, _format_results(results, errors)),
+                event,
+                _format_results(results, errors),
             )
             return
-        await finish_processing_reply(imgsearch, processing, result_image)
+        await finish_processing_reply(imgsearch, processing, event, result_image)
     except FinishedException:
         raise
     except (HttpRequestError, ValueError) as e:
         logger.warning("imgsearch request error: {}", e)
-        await finish_processing_reply(imgsearch, processing, _reply(event, str(e)))
+        await finish_processing_reply(imgsearch, processing, event, str(e))
     except Exception:  # noqa: BLE001
         logger.exception("imgsearch unexpected error")
         await finish_processing_reply(
             imgsearch,
             processing,
-            _reply(event, "搜图失败，请稍后重试"),
+            event,
+            "搜图失败，请稍后重试",
         )

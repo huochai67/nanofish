@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import httpx
 from nonebot import logger, on_command, require
-from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent, MessageSegment
+from nonebot.adapters.onebot.v11 import Bot, Message, MessageEvent
 from nonebot.exception import FinishedException
 from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
@@ -30,6 +30,7 @@ from ..utils import (
     get_plaintext,
     get_reply,
     http_get,
+    reply_to_event,
     send_processing_reply,
 )
 from .config import Config
@@ -246,17 +247,19 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
     try:
         quota = check_quota(event, "llm")
         if not quota.allowed:
-            await llm.finish(quota.message or "额度不足", at_sender=True)
+            await llm.finish(
+                reply_to_event(event, quota.message or "额度不足"), at_sender=True
+            )
             return
 
         if event.raw_message == "":
-            await llm.finish("请发送内容", at_sender=True)
+            await llm.finish(reply_to_event(event, "请发送内容"), at_sender=True)
             return
     except FinishedException:
         raise
     except Exception as e:  # noqa: BLE001
         logger.exception(f"[LLM] request setup failed: {e}")
-        await llm.finish("处理失败，请稍后重试", at_sender=True)
+        await llm.finish(reply_to_event(event, "处理失败，请稍后重试"), at_sender=True)
         return
 
     processing = await send_processing_reply(llm, bot, event, "正在处理，请稍候…")
@@ -266,7 +269,9 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
 
         quota = consume_quota(event, "llm")
         if not quota.allowed:
-            await llm.finish(quota.message or "额度不足", at_sender=True)
+            await llm.finish(
+                reply_to_event(event, quota.message or "额度不足"), at_sender=True
+            )
             return
         retmsg = await openai(model=config.model, message=llmmsg)
         logger.debug(f"[LLM]retmsg: {retmsg}")
@@ -275,6 +280,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         await finish_processing_reply(
             llm,
             processing,
+            event,
             await app_chat_image_cq({"messages": llmmsg}),
             at_sender=True,
         )
@@ -282,12 +288,13 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         raise
     except ValueError as e:
         logger.warning(f"[LLM] input error: {e}")
-        await finish_processing_reply(llm, processing, str(e), at_sender=True)
+        await finish_processing_reply(llm, processing, event, str(e), at_sender=True)
     except OpenAIError as e:
         logger.warning(f"[LLM] api error: {e}")
         await finish_processing_reply(
             llm,
             processing,
+            event,
             openai_error_message(e),
             at_sender=True,
         )
@@ -296,6 +303,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         await finish_processing_reply(
             llm,
             processing,
+            event,
             "处理失败，请稍后重试",
             at_sender=True,
         )
@@ -319,15 +327,12 @@ async def _resolve_draw_request(
     return prompt, image_urls
 
 
-def _reply_to_event(event: MessageEvent, content: Message | str) -> Message:
-    """Build a message that quotes the user's request."""
-    return MessageSegment.reply(event.message_id) + content
-
-
 async def _consume_draw_quota_or_finish(event: MessageEvent) -> None:
     quota = consume_quota(event, "draw")
     if not quota.allowed:
-        await draw.finish(quota.message or "额度不足", at_sender=True)
+        await draw.finish(
+            reply_to_event(event, quota.message or "额度不足"), at_sender=True
+        )
 
 
 @draw.handle()
@@ -339,19 +344,23 @@ async def handle_draw(
     try:
         quota = check_quota(event, "draw")
         if not quota.allowed:
-            await draw.finish(quota.message or "额度不足", at_sender=True)
+            await draw.finish(
+                reply_to_event(event, quota.message or "额度不足"), at_sender=True
+            )
             return
 
         prompt, image_urls = await _resolve_draw_request(bot, event, arg)
         if not prompt:
             await draw.finish(
-                "用法: /draw <描述>；可附图或直接引用含图片的消息作为参考图",
+                reply_to_event(
+                    event, "用法: /draw <描述>；可附图或直接引用含图片的消息作为参考图"
+                ),
                 at_sender=True,
             )
             return
         if len(image_urls) > MAX_REFERENCE_IMAGES:
             await draw.finish(
-                f"参考图最多支持 {MAX_REFERENCE_IMAGES} 张",
+                reply_to_event(event, f"参考图最多支持 {MAX_REFERENCE_IMAGES} 张"),
                 at_sender=True,
             )
             return
@@ -359,7 +368,7 @@ async def handle_draw(
         raise
     except Exception as e:  # noqa: BLE001
         logger.exception("[LLM/draw] request setup failed: %s", e)
-        await draw.finish(_reply_to_event(event, "生图失败，请稍后重试"))
+        await draw.finish(reply_to_event(event, "生图失败，请稍后重试"))
         return
 
     await _consume_draw_quota_or_finish(event)
@@ -375,7 +384,8 @@ async def handle_draw(
         await finish_processing_reply(
             draw,
             processing,
-            _reply_to_event(event, images_to_cq(b64_list)),
+            event,
+            images_to_cq(b64_list),
         )
     except FinishedException:
         raise
@@ -384,14 +394,16 @@ async def handle_draw(
         await finish_processing_reply(
             draw,
             processing,
-            _reply_to_event(event, e.message),
+            event,
+            e.message,
         )
     except Exception as e:  # noqa: BLE001
         logger.exception("[LLM/draw] unexpected error: %s", e)
         await finish_processing_reply(
             draw,
             processing,
-            _reply_to_event(event, "生图失败，请稍后重试"),
+            event,
+            "生图失败，请稍后重试",
         )
 
 

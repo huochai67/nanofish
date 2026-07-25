@@ -21,6 +21,7 @@ from ..utils import (
     get_image_urls,
     get_reply,
     http_get,
+    reply_to_event,
     send_processing_reply,
 )
 from .c2pa import inspect_image_url
@@ -50,15 +51,18 @@ AI_UNLIKELY_THRESHOLD = 0.2
 async def _consume_quota_or_finish(event: MessageEvent) -> None:
     quota = consume_quota(event, "genai")
     if not quota.allowed:
-        await genai.finish(quota.message or "额度不足")
+        await genai.finish(reply_to_event(event, quota.message or "额度不足"))
 
 
-async def _finish_if_trusted_c2pa(processing: ProcessingReply, imageurl: str) -> None:
+async def _finish_if_trusted_c2pa(
+    event: MessageEvent, processing: ProcessingReply, imageurl: str
+) -> None:
     result = await inspect_image_url(imageurl, plugin_config)
     if result.trusted:
         await finish_processing_reply(  # type: ignore[reportArgumentType]
             genai,
             processing,
+            event,
             trusted_message(result),
         )
 
@@ -87,16 +91,16 @@ async def handle_received_images(bot: Bot, event: MessageEvent) -> None:
 async def handle_function(bot: Bot, event: MessageEvent) -> None:
     quota = check_quota(event, "genai")
     if not quota.allowed:
-        await genai.finish(quota.message or "额度不足")
+        await genai.finish(reply_to_event(event, quota.message or "额度不足"))
 
     msg_reply = await get_reply(bot=bot, msg=event.original_message)
     if not msg_reply:
-        await genai.finish("获取被回复消息失败")
+        await genai.finish(reply_to_event(event, "获取被回复消息失败"))
     assert msg_reply is not None
 
     imageurl = get_first_image(msg=Message(msg_reply.get("raw_message")))
     if not imageurl:
-        await genai.finish("被回复消息中没有图片")
+        await genai.finish(reply_to_event(event, "被回复消息中没有图片"))
     assert imageurl is not None
 
     processing = await send_processing_reply(
@@ -105,7 +109,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         event,
         "正在检查 C2PA 凭证并检测图片，请稍候…",
     )
-    await _finish_if_trusted_c2pa(processing, imageurl)
+    await _finish_if_trusted_c2pa(event, processing, imageurl)
 
     try:
         await _consume_quota_or_finish(event)
@@ -125,6 +129,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         await finish_processing_reply(
             genai,
             processing,
+            event,
             e.message,
         )
     except Exception as e:  # noqa: BLE001
@@ -132,6 +137,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         await finish_processing_reply(
             genai,
             processing,
+            event,
             f"Sightengine API 处理失败: {type(e).__name__}: {e}",
         )
 
@@ -141,6 +147,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         await finish_processing_reply(
             genai,
             processing,
+            event,
             f"Sightengine API 请求失败: {error}",
         )
 
@@ -151,6 +158,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         await finish_processing_reply(
             genai,
             processing,
+            event,
             f"Sightengine API 返回数据异常: {e}",
         )
 
@@ -161,4 +169,9 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
     else:
         ret = "无法确定是否为 AI 生成"
 
-    await finish_processing_reply(genai, processing, f"sightengine: {ret} ({rate:.2f})")
+    await finish_processing_reply(
+        genai,
+        processing,
+        event,
+        f"sightengine: {ret} ({rate:.2f})",
+    )

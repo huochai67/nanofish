@@ -8,7 +8,9 @@ from nonebot.plugin import PluginMetadata
 from .config import Config
 
 require("acl")
+require("utils")
 from ..acl import require_command
+from ..utils import reply_to_event
 
 __plugin_meta__ = PluginMetadata(
     name="jrrp",
@@ -28,4 +30,8 @@ async def handle_function(event: MessageEvent) -> None:
     today = datetime.datetime.now(tz=datetime.UTC).date().toordinal()
     random.seed(today + user_id)
     luck = random.randint(0, 100)
-    await jrrp.finish(f"{event.sender.nickname} 您今天将收到我 {luck} 的真诚祝福")
+    await jrrp.finish(
+        reply_to_event(
+            event, f"{event.sender.nickname} 您今天将收到我 {luck} 的真诚祝福"
+        )
+    )

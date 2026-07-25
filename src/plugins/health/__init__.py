@@ -212,12 +212,15 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
             await check_eh_tags(),
             check_sightengine(),
         ]
-        await finish_processing_reply(health, processing, format_results(results))
+        await finish_processing_reply(
+            health, processing, event, format_results(results)
+        )
     except FinishedException:
         raise
     except Exception as e:  # noqa: BLE001
         await finish_processing_reply(
             health,
             processing,
+            event,
             f"健康检查失败: {type(e).__name__}: {e}",
         )
