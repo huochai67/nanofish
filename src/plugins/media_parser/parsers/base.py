@@ -68,7 +68,11 @@ class BaseParser:
 
         # 获取所有被 handle 装饰的方法
         for attr_name in dir(cls):
-            attr = getattr(cls, attr_name)
+            try:
+                attr = getattr(cls, attr_name)
+            except AttributeError:
+                # ABC creates internal descriptors before they are initialized.
+                continue
             if callable(attr) and hasattr(attr, _KEY_PATTERNS):
                 key_patterns: KeyPatterns = getattr(attr, _KEY_PATTERNS)
                 handler = cast(HandlerFunc, attr)
@@ -253,6 +257,7 @@ class BaseParser:
         self,
         url_or_task: str | Task[Path],
         duration: float = 0.0,
+        cover_url: str | None = None,
     ):
         """创建音频内容"""
         from .data import AudioContent
@@ -262,7 +267,8 @@ class BaseParser:
         elif isinstance(url_or_task, Task):
             path_task = url_or_task
 
-        return AudioContent(PathTask(path_task), duration)
+        cover = PathTask(downloader.download_img(cover_url, ext_headers=self.headers)) if cover_url else None
+        return AudioContent(PathTask(path_task), duration, cover)
 
     @property
     def downloader(self):

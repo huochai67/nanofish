@@ -29,6 +29,8 @@ class AudioContent(MediaContent):
 
     duration: float | None = None
     """时长 单位: 秒"""
+    cover: PathTask | None = None
+    """专辑封面"""
 
 
 @dataclass(repr=False, slots=True)
@@ -211,6 +213,8 @@ class ParseResult:
                 yield cont.path_task.get()
 
             if isinstance(cont, VideoContent) and cont.cover:
+                yield cont.cover.get()
+            elif isinstance(cont, AudioContent) and cont.cover:
                 yield cont.cover.get()
 
         for gra in self.graphics:

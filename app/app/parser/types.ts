@@ -9,7 +9,7 @@ import {
 export type ParserMedia =
   | { kind: "image"; src?: string; alt?: string }
   | { kind: "video"; poster?: string; duration?: number; isGif?: boolean }
-  | { kind: "audio"; duration?: number };
+  | { kind: "audio"; duration?: number; cover?: string };
 
 export type ParserGraphic =
   | { kind: "text"; text: string }
@@ -73,9 +73,9 @@ function parseMedia(value: unknown): ParserMedia | null {
   }
   if (kind === "audio") {
     const duration = media.duration;
-    return duration === undefined || (typeof duration === "number" && Number.isFinite(duration))
-      ? { kind, duration }
-      : null;
+    if (duration !== undefined && (typeof duration !== "number" || !Number.isFinite(duration))) return null;
+    const cover = optionalSafeUrl(media, "cover", true);
+    return cover === null ? null : { kind, duration, cover };
   }
 
   return null;

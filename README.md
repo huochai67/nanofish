@@ -22,7 +22,7 @@ docker/          # 容器启动脚本
 | `genai_detect` | `/genai` | 自动验证所有接收图片的内嵌可信 C2PA 凭证；`/genai` 使用 Sightengine 检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |
-| `media_parser` | 自动解析支持平台链接、`/bm` | 前端主题卡片预览与媒体回传（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
+| `media_parser` | 自动解析支持平台链接、`/bm` | 前端主题卡片预览与媒体回传；支持 YouTube Music、Spotify、网易云音乐、QQ 音乐，受授权、登录、地区或 DRM 限制的歌曲仅返回卡片（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
 | `utils` | — | 共享消息解析工具 |
 
 ### 权限（acl）

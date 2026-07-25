@@ -22,6 +22,14 @@ class Config(BaseModel):
     """youtube cookies"""
     parser_xhs_ck: str | None = None
     """小红书 cookies"""
+    parser_ytmusic_ck: str | None = None
+    """YouTube Music cookies"""
+    parser_spotify_ck: str | None = None
+    """Spotify cookies"""
+    parser_netease_music_ck: str | None = None
+    """网易云音乐 cookies"""
+    parser_qq_music_ck: str | None = None
+    """QQ 音乐 cookies"""
     parser_proxy: str | None = None
     """代理"""
     parser_need_upload: bool = False
@@ -101,6 +109,26 @@ class Config(BaseModel):
     def xhs_ck(self) -> str | None:
         """小红书 cookies"""
         return self.parser_xhs_ck
+
+    @property
+    def ytmusic_ck(self) -> str | None:
+        """YouTube Music cookies"""
+        return self.parser_ytmusic_ck
+
+    @property
+    def spotify_ck(self) -> str | None:
+        """Spotify cookies"""
+        return self.parser_spotify_ck
+
+    @property
+    def netease_music_ck(self) -> str | None:
+        """网易云音乐 cookies"""
+        return self.parser_netease_music_ck
+
+    @property
+    def qq_music_ck(self) -> str | None:
+        """QQ 音乐 cookies"""
+        return self.parser_qq_music_ck
 
     @property
     def proxy(self) -> str | None:

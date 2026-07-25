@@ -119,6 +119,38 @@ const THEMES: Record<string, Theme> = {
     logo: "/parser/youtube.png",
     Icon: Play,
   },
+  youtube_music: {
+    label: "YouTube Music",
+    accent: "#ff1744",
+    accentSoft: "#fff0f2",
+    background: "linear-gradient(145deg, #fff1f3 0%, #fff 52%, #f7f0f3 100%)",
+    card: "#ffffff",
+    Icon: AudioLines,
+  },
+  spotify: {
+    label: "Spotify",
+    accent: "#1db954",
+    accentSoft: "#e4f8eb",
+    background: "linear-gradient(145deg, #e9f8ed 0%, #fff 52%, #eaf7ee 100%)",
+    card: "#ffffff",
+    Icon: AudioLines,
+  },
+  netease_music: {
+    label: "网易云音乐",
+    accent: "#d93026",
+    accentSoft: "#fff0ef",
+    background: "linear-gradient(145deg, #fff0ef 0%, #fff 52%, #fff3f2 100%)",
+    card: "#ffffff",
+    Icon: AudioLines,
+  },
+  qq_music: {
+    label: "QQ 音乐",
+    accent: "#31c27c",
+    accentSoft: "#e4f8ed",
+    background: "linear-gradient(145deg, #ebf9f1 0%, #fff 52%, #e7f7ef 100%)",
+    card: "#ffffff",
+    Icon: AudioLines,
+  },
   twitter: {
     label: "X",
     accent: "#111827",
@@ -176,6 +208,9 @@ function imageCount(result: ParserResult, repost = false, maxGridImages = 9): nu
   );
   const visibleImages = Math.min(images.length, maxGridImages);
   const videoAsset = video?.kind === "video" && video.poster ? 1 : 0;
+  const audioAssets = result.contents.filter(
+    (content): content is Extract<ParserResult["contents"][number], { kind: "audio" }> => content.kind === "audio",
+  ).filter((content) => Boolean(content.cover)).length;
 
   if (!repost && result.platform.name === "bilibili") {
     return (
@@ -197,6 +232,7 @@ function imageCount(result: ParserResult, repost = false, maxGridImages = 9): nu
     platformLogo +
     Number(Boolean(result.author?.avatar)) +
     (video ? videoAsset : visibleImages) +
+    audioAssets +
     graphics +
     (result.repost ? imageCount(result.repost, true, maxGridImages) : 0)
   );
@@ -396,8 +432,17 @@ function ParserCard({
         ) : null}
 
         {audio.map((media, index) => (
-          <div key={index} className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${dark ? "bg-white/10 text-slate-200" : "bg-slate-50 text-slate-600"}`}>
-            <AudioLines size={17} style={{ color: theme.accent }} />
+          <div key={index} className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${dark ? "bg-white/10 text-slate-200" : "bg-slate-50 text-slate-600"}`}>
+            {media.cover ? (
+              <img
+                src={media.cover}
+                alt="专辑封面"
+                className="h-10 w-10 rounded-lg object-cover shadow-sm"
+                referrerPolicy="no-referrer"
+                onLoad={onAsset}
+                onError={onAsset}
+              />
+            ) : <AudioLines size={17} style={{ color: theme.accent }} />}
             <span>音频内容</span>
             {formatDuration(media.duration) ? <span className="ml-auto text-xs opacity-70">{formatDuration(media.duration)}</span> : null}
           </div>

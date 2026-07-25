@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from pathlib import Path
 from collections import defaultdict
@@ -34,6 +35,18 @@ class VideoInfo(Struct):
     @property
     def author_name(self) -> str:
         return f"{self.channel}@{self.uploader}"
+
+
+@dataclass(frozen=True, slots=True)
+class AudioInfo:
+    """Metadata returned by yt-dlp for a single audio item."""
+
+    title: str
+    artist: str | None = None
+    album: str | None = None
+    duration: float | None = None
+    thumbnail: str | None = None
+    webpage_url: str | None = None
 
 
 class YtdlpDownloader:
@@ -72,6 +85,39 @@ class YtdlpDownloader:
         video_info = convert(info_dict, VideoInfo)
         self._video_info_mapping[url] = video_info
         return video_info
+
+    async def extract_audio_info(self, url: str, cookiefile: Path | None = None) -> AudioInfo:
+        """Extract track metadata without requiring a playable audio stream."""
+        ydl_opts = self._extract_base_opts.copy()
+        # Music pages need their native extractors; generic extraction omits album metadata.
+        ydl_opts.pop("force_generic_extractor", None)
+        ydl_opts["noplaylist"] = True
+        if cookiefile:
+            ydl_opts["cookiefile"] = str(cookiefile)
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = await asyncio.to_thread(ydl.extract_info, url, download=False)
+        if not info_dict:
+            raise ParseException("获取音频信息失败")
+
+        entry = info_dict
+        if entries := info_dict.get("entries"):
+            entry = next((item for item in entries if item), None)
+        if entry is None:
+            raise ParseException("获取音频信息失败")
+        title = entry.get("title")
+        if not isinstance(title, str) or not title:
+            raise ParseException("获取音频信息失败")
+
+        artist = entry.get("artist") or entry.get("uploader") or entry.get("channel")
+        return AudioInfo(
+            title=title,
+            artist=artist,
+            album=entry.get("album"),
+            duration=entry.get("duration"),
+            thumbnail=entry.get("thumbnail"),
+            webpage_url=entry.get("webpage_url") or url,
+        )
 
     @auto_task
     async def download_video(self, url: str, cookiefile: Path | None = None) -> Path:
@@ -112,8 +158,16 @@ class YtdlpDownloader:
         return video_path
 
     @auto_task
-    async def download_audio(self, url: str, cookiefile: Path | None = None) -> Path:
+    async def download_audio(
+        self,
+        url: str,
+        cookiefile: Path | None = None,
+        duration: float | None = None,
+    ) -> Path:
         """Download audio by yt-dlp"""
+
+        if duration is not None and duration > pconfig.duration_maximum:
+            raise IgnoreException(f"音频时长超过 {pconfig.duration_maximum} 秒")
 
         file_name = generate_file_name(url)
         audio_path = pconfig.cache_dir / f"{file_name}.flac"
@@ -146,4 +200,10 @@ class YtdlpDownloader:
                 if audio_path.exists():
                     return audio_path
                 raise
+
+            if not audio_path.is_file():
+                raise ParseException("音频转换失败")
+            if audio_path.stat().st_size > pconfig.max_size * 1024 * 1024:
+                audio_path.unlink(missing_ok=True)
+                raise IgnoreException(f"音频大小超过 {pconfig.max_size} MB")
         return audio_path

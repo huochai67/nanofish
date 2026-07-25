@@ -9,6 +9,12 @@ from .bilibili import BilibiliParser as BilibiliParser
 from .kuaishou import KuaiShouParser as KuaiShouParser
 from ..download import yt_dlp_downloader as yt_dlp_downloader
 from .xiaohongshu import XiaoHongShuParser as XiaoHongShuParser
+from .music import (
+    NeteaseMusicParser as NeteaseMusicParser,
+    QQMusicParser as QQMusicParser,
+    SpotifyParser as SpotifyParser,
+    YouTubeMusicParser as YouTubeMusicParser,
+)
 
 if yt_dlp_downloader is not None:
     from .tiktok import TikTokParser as TikTokParser

@@ -84,7 +84,13 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
                 }
             )
         elif isinstance(content, AudioContent):
-            contents.append({"kind": "audio", "duration": content.duration})
+            contents.append(
+                {
+                    "kind": "audio",
+                    "duration": content.duration,
+                    "cover": await _image_data(content.cover),
+                }
+            )
 
     graphics: list[dict[str, Any]] = []
     for graphic in result.graphics:

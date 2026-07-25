@@ -47,10 +47,14 @@ acl:
 
 # 链接解析插件。cookie 仅填写本地 config.yaml，更新后需重启机器人。
 media_parser:
-  # Bilibili、小红书和 YouTube cookie；没有则保持空字符串。
+  # Bilibili、小红书、YouTube 和音乐平台 cookie；没有则保持空字符串。
   parser_bili_ck: ""
   parser_xhs_ck: ""
   parser_ytb_ck: ""
+  parser_ytmusic_ck: ""
+  parser_spotify_ck: ""
+  parser_netease_music_ck: ""
+  parser_qq_music_ck: ""
   # 仅链接解析请求使用的代理；null 表示不单独设置。
   parser_proxy: null
   # 是否上传音频文件，以及是否将媒体编码为 base64 发送。
@@ -61,7 +65,7 @@ media_parser:
   parser_duration_maximum: 120
   # 是否在解析结果中追加原始链接。
   parser_append_url: true
-  # 禁用的平台列表。核心部署默认关闭 yt-dlp/Deno 依赖的平台。
+  # 禁用的平台列表。核心部署默认关闭需境外网络或登录态的平台。
   parser_disabled_platforms: [youtube, tiktok, twitter, nga]
   # 是否以合并转发消息发送媒体内容。
   parser_need_forward_contents: true

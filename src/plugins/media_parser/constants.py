@@ -35,11 +35,15 @@ class PlatformEnum(str, Enum):
     DOUYIN = "douyin"
     KUAISHOU = "kuaishou"
     NGA = "nga"
+    NETEASE_MUSIC = "netease_music"
+    QQ_MUSIC = "qq_music"
+    SPOTIFY = "spotify"
     TIKTOK = "tiktok"
     TWITTER = "twitter"
     WEIBO = "weibo"
     XIAOHONGSHU = "xiaohongshu"
     YOUTUBE = "youtube"
+    YOUTUBE_MUSIC = "youtube_music"
 
     def __str__(self) -> str:
         return self.value
