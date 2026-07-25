@@ -10,9 +10,8 @@ from urllib.parse import urlsplit
 
 from nonebot import logger
 
-from src.c2pa_validation import C2paResult, C2paStatus, inspect_embedded_c2pa
-
 from ..utils import HttpRequestError, http_get
+from .c2pa_validation import C2paResult, C2paStatus, inspect_embedded_c2pa
 
 if TYPE_CHECKING:
     from .config import Config

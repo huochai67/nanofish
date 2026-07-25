@@ -5,9 +5,9 @@ from nonebot.adapters.onebot.v11 import Bot, MessageEvent, MessageSegment
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.plugin import PluginMetadata
 
-from src.c2pa_validation import trusted_message
 from src.plugin_config import get_yaml_plugin_config
 
+from .c2pa_validation import trusted_message
 from .config import Config
 
 require("acl")

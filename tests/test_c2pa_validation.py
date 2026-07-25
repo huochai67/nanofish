@@ -1,8 +1,26 @@
+import importlib.util
+import sys
 import unittest
+from pathlib import Path
+from types import ModuleType
 from typing import Self
 from unittest.mock import patch
 
-from src import c2pa_validation
+
+def _load_c2pa_validation() -> ModuleType:
+    plugin_dir = Path(__file__).parents[1] / "src/plugins/genai_detect"
+    module_path = plugin_dir / "c2pa_validation.py"
+    spec = importlib.util.spec_from_file_location("c2pa_validation_test", module_path)
+    if spec is None or spec.loader is None:
+        msg = "unable to load C2PA validation module"
+        raise RuntimeError(msg)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+c2pa_validation = _load_c2pa_validation()
 
 
 class _Context:
