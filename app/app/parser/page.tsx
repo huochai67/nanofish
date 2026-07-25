@@ -12,7 +12,6 @@ import {
   Ellipsis,
   FileText,
   Heart,
-  Image as ImageIcon,
   Link as LinkIcon,
   MessageCircle,
   MessageCircleMore,
@@ -176,12 +175,13 @@ function imageCount(result: ParserResult, repost = false, maxGridImages = 9): nu
       content.kind === "image" && Boolean(content.src),
   );
   const visibleImages = Math.min(images.length, maxGridImages);
+  const videoAsset = video?.kind === "video" && video.poster ? 1 : 0;
 
   if (!repost && result.platform.name === "bilibili") {
     return (
       1 +
       Number(Boolean(result.author?.pendant)) +
-      (video?.kind === "video" && video.poster ? 1 : Math.min(images.length, 9))
+      (video ? videoAsset : Math.min(images.length, 9))
     );
   }
 
@@ -196,7 +196,7 @@ function imageCount(result: ParserResult, repost = false, maxGridImages = 9): nu
   return (
     platformLogo +
     Number(Boolean(result.author?.avatar)) +
-    (video?.kind === "video" && video.poster ? 1 : visibleImages) +
+    (video ? videoAsset : visibleImages) +
     graphics +
     (result.repost ? imageCount(result.repost, true, maxGridImages) : 0)
   );
@@ -214,7 +214,7 @@ function formatTime(timestamp?: number | null): string | null {
 }
 
 function formatDuration(duration?: number): string | null {
-  if (!duration || duration < 0) return null;
+  if (duration === undefined || duration < 0) return null;
   const total = Math.round(duration);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
@@ -235,7 +235,7 @@ function XiaohongshuText({ text }: { text: string }) {
 export default function ParserPage() {
   const [data, setData] = useState<ParserScreenshotData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
+  const { status, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -255,7 +255,7 @@ export default function ParserPage() {
   return (
     <main
       className="min-h-screen px-4 py-5 text-slate-900"
-      data-ready={ready ? "true" : "false"}
+      data-ready={status}
       style={{ background: theme.background }}
     >
       <section className="mx-auto max-w-[760px]">
@@ -302,7 +302,8 @@ function ParserCard({
   const muted = dark ? "text-slate-400" : "text-slate-500";
   const video = result.contents.find((content) => content.kind === "video");
   const images = result.contents.filter(
-    (content): content is Extract<typeof content, { kind: "image" }> => content.kind === "image",
+    (content): content is Extract<typeof content, { kind: "image" }> =>
+      content.kind === "image" && Boolean(content.src),
   );
   const audio = result.contents.filter(
     (content): content is Extract<typeof content, { kind: "audio" }> => content.kind === "audio",
@@ -349,6 +350,7 @@ function ParserCard({
                 src={result.author.avatar}
                 alt=""
                 className="h-11 w-11 rounded-full border border-white object-cover shadow-sm"
+                referrerPolicy="no-referrer"
                 onLoad={onAsset}
                 onError={onAsset}
               />
@@ -384,6 +386,7 @@ function ParserCard({
                   src={graphic.src}
                   alt={graphic.alt ?? "解析图片"}
                   className="max-h-[560px] w-full rounded-xl object-contain"
+                  referrerPolicy="no-referrer"
                   onLoad={onAsset}
                   onError={onAsset}
                 />
@@ -429,7 +432,8 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
     (content): content is Extract<ParserResult["contents"][number], { kind: "video" }> => content.kind === "video",
   );
   const images = result.contents.filter(
-    (content): content is Extract<ParserResult["contents"][number], { kind: "image" }> => content.kind === "image",
+    (content): content is Extract<ParserResult["contents"][number], { kind: "image" }> =>
+      content.kind === "image" && Boolean(content.src),
   );
   const body = result.text ?? result.title;
 
@@ -442,6 +446,7 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
               src={result.author.avatar}
               alt=""
               className="h-11 w-11 rounded-full object-cover"
+              referrerPolicy="no-referrer"
               onLoad={onAsset}
               onError={onAsset}
             />
@@ -459,6 +464,7 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
               src={result.author.pendant}
               alt=""
               className="pointer-events-none absolute -inset-1 h-[52px] w-[52px] max-w-none object-contain"
+              referrerPolicy="no-referrer"
               onLoad={onAsset}
               onError={onAsset}
             />
@@ -483,7 +489,7 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
         <div className="mt-3 flex overflow-hidden rounded-md border border-[#e3e5e7] bg-[#f6f7f8]">
           <div className="relative h-32 w-[38%] shrink-0 bg-[#2b2d31]">
             {video.poster ? (
-              <img src={video.poster} alt="" className="h-full w-full object-cover" onLoad={onAsset} onError={onAsset} />
+              <img src={video.poster} alt={result.title ?? "视频封面"} className="h-full w-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} />
             ) : null}
             <span className="absolute bottom-2 right-2 rounded bg-black/65 px-1.5 py-0.5 text-xs text-white">{formatDuration(video.duration) ?? "视频"}</span>
           </div>
@@ -516,26 +522,27 @@ function XiaohongshuCard({ result, onAsset }: { result: ParserResult; onAsset: (
     (content): content is Extract<ParserResult["contents"][number], { kind: "video" }> => content.kind === "video",
   );
   const image = result.contents.find(
-    (content): content is Extract<ParserResult["contents"][number], { kind: "image" }> => content.kind === "image",
+    (content): content is Extract<ParserResult["contents"][number], { kind: "image" }> =>
+      content.kind === "image" && Boolean(content.src),
   );
   const media = video?.poster ?? image?.src;
 
   return (
     <article data-parser-card className="overflow-hidden rounded-[18px] bg-white shadow-[0_14px_42px_rgba(15,23,42,0.12)] sm:flex">
-      <section className="relative flex min-h-[420px] items-center justify-center bg-[#202124] sm:min-h-[620px] sm:w-[54%]">
-        {media ? <img src={media} alt="" className="h-full w-full object-cover" onLoad={onAsset} onError={onAsset} /> : <div className="h-full w-full bg-gradient-to-br from-[#434343] to-[#111]" />}
+      <section className="relative flex aspect-[4/5] items-center justify-center bg-[#202124] sm:aspect-auto sm:min-h-[620px] sm:w-[54%]">
+        {media ? <img src={media} alt={result.title ?? "解析媒体"} className="h-full w-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <div className="h-full w-full bg-gradient-to-br from-[#434343] to-[#111]" />}
         {video ? (
           <span className="absolute inset-0 flex items-center justify-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 pl-1 text-[#222] shadow-xl"><Play size={30} fill="currentColor" /></span>
           </span>
         ) : null}
-        {video?.duration ? <span className="absolute bottom-4 right-4 rounded bg-black/60 px-2 py-1 text-xs text-white">{formatDuration(video.duration)}</span> : null}
+        {video?.duration !== undefined ? <span className="absolute bottom-4 right-4 rounded bg-black/60 px-2 py-1 text-xs text-white">{formatDuration(video.duration)}</span> : null}
       </section>
 
-      <section className="flex min-h-[420px] flex-1 flex-col px-5 py-5 sm:min-h-[620px]">
+      <section className="flex flex-1 flex-col px-5 py-5 sm:min-h-[620px]">
         <header className="flex items-center gap-2.5">
           {result.author?.avatar ? (
-            <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover" onLoad={onAsset} onError={onAsset} />
+            <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} />
           ) : (
             <img
               src="/parser/avatar.png"
@@ -571,7 +578,7 @@ function XiaohongshuCard({ result, onAsset }: { result: ParserResult; onAsset: (
 function VideoView({ media, onAsset }: { media: Extract<ParserResult["contents"][number], { kind: "video" }>; onAsset: () => void }) {
   return (
     <div className="relative aspect-video overflow-hidden rounded-2xl bg-slate-900">
-      {media.poster ? <img src={media.poster} alt="" className="h-full w-full object-cover opacity-90" onLoad={onAsset} onError={onAsset} /> : <div className="h-full w-full bg-gradient-to-br from-slate-700 to-slate-950" />}
+      {media.poster ? <img src={media.poster} alt="视频封面" className="h-full w-full object-cover opacity-90" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <div className="h-full w-full bg-gradient-to-br from-slate-700 to-slate-950" />}
       <span className="absolute inset-0 flex items-center justify-center"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/85 pl-0.5 text-slate-900 shadow-xl"><Play size={26} fill="currentColor" /></span></span>
       {formatDuration(media.duration) ? <span className="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white">{formatDuration(media.duration)}</span> : null}
     </div>
@@ -585,7 +592,7 @@ function MediaGrid({ images, maxItems, onAsset }: { images: Extract<ParserResult
     <div className={`grid gap-1.5 ${columns}`}>
       {shown.map((image, index) => (
         <div key={index} className={`relative overflow-hidden rounded-xl bg-slate-100 ${shown.length === 1 ? "max-h-[620px]" : "aspect-square"}`}>
-          {image.src ? <img src={image.src} alt={image.alt ?? ""} className="h-full w-full object-cover" onLoad={onAsset} onError={onAsset} /> : <span className="flex h-full w-full items-center justify-center text-slate-300"><ImageIcon size={24} /></span>}
+          <img src={image.src} alt={image.alt ?? "解析图片"} className="h-full w-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} />
           {index === shown.length - 1 && images.length > maxItems ? <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-xl font-bold text-white">+{images.length - maxItems}</span> : null}
         </div>
       ))}

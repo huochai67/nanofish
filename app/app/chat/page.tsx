@@ -57,7 +57,7 @@ export default function ChatPage() {
   const [chatData, setChatData] = useState<ChatData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
+  const { status, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -80,14 +80,14 @@ export default function ChatPage() {
 
   const copyShareUrl = async () => {
     if (!chatData) return;
-    const url = new URL(window.location.href);
-    url.searchParams.set("data", encodeUrlData(chatData));
     try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("data", encodeUrlData(chatData));
       await navigator.clipboard.writeText(url.toString());
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
-      // ignore clipboard failures in restricted contexts
+      setError("对话内容过大或浏览器拒绝访问剪贴板，无法生成分享链接。");
     }
   };
 
@@ -101,7 +101,7 @@ export default function ChatPage() {
   return (
     <div
       className="min-h-screen bg-zinc-50 text-zinc-900"
-      data-ready={ready ? "true" : "false"}
+      data-ready={status}
     >
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-5 py-4">
@@ -302,6 +302,7 @@ function ImageSegment({ url, onAsset }: { url: string; onAsset: () => void }) {
         src={url}
         alt="对话中的图片"
         className="max-h-72 w-auto max-w-full object-contain"
+        referrerPolicy="no-referrer"
         onLoad={onAsset}
         onError={() => {
           setFailed(true);

@@ -2,6 +2,7 @@ import {
   asRecord,
   optionalNullableNumber,
   optionalNullableString,
+  optionalSafeUrl,
   optionalString,
 } from "@/app/utils/data-validation";
 
@@ -52,7 +53,8 @@ function parseMedia(value: unknown): ParserMedia | null {
   if (!media || typeof kind !== "string") return null;
 
   if (kind === "image") {
-    return { kind, src: optionalString(media, "src"), alt: optionalString(media, "alt") };
+    const src = optionalSafeUrl(media, "src", true);
+    return src === null ? null : { kind, src, alt: optionalString(media, "alt") };
   }
   if (kind === "video") {
     const duration = media.duration;
@@ -60,9 +62,11 @@ function parseMedia(value: unknown): ParserMedia | null {
       return null;
     }
     if (media.isGif !== undefined && typeof media.isGif !== "boolean") return null;
+    const poster = optionalSafeUrl(media, "poster", true);
+    if (poster === null) return null;
     return {
       kind,
-      poster: optionalString(media, "poster"),
+      poster,
       duration,
       isGif: media.isGif as boolean | undefined,
     };
@@ -86,7 +90,8 @@ function parseGraphic(value: unknown): ParserGraphic | null {
     return text === undefined ? null : { kind, text };
   }
   if (kind === "image") {
-    return { kind, src: optionalString(graphic, "src"), alt: optionalString(graphic, "alt") };
+    const src = optionalSafeUrl(graphic, "src", true);
+    return src === null ? null : { kind, src, alt: optionalString(graphic, "alt") };
   }
   return null;
 }
@@ -100,7 +105,7 @@ function parseStats(value: unknown): ParserStats | null {
   for (const key of ["view", "danmaku", "reply", "favorite", "coin", "share", "like", "collect", "comment"]) {
     const count = stats[key];
     if (count === undefined) continue;
-    if (typeof count !== "number" || !Number.isFinite(count)) return null;
+    if (typeof count !== "number" || !Number.isFinite(count) || count < 0) return null;
     parsed[key] = count;
   }
   return parsed;
@@ -113,7 +118,14 @@ function parseResult(value: unknown, depth = 0): ParserResult | null {
   const platformName = platform ? optionalString(platform, "name") : undefined;
   const displayName = platform ? optionalString(platform, "displayName") : undefined;
   if (!result || !platform || platformName === undefined || displayName === undefined) return null;
-  if (!Array.isArray(result.contents) || !Array.isArray(result.graphics)) return null;
+  if (
+    !Array.isArray(result.contents) ||
+    result.contents.length > 20 ||
+    !Array.isArray(result.graphics) ||
+    result.graphics.length > 20
+  ) {
+    return null;
+  }
 
   const contents = result.contents.map(parseMedia);
   const graphics = result.graphics.map(parseGraphic);
@@ -128,16 +140,22 @@ function parseResult(value: unknown, depth = 0): ParserResult | null {
     const rawAuthor = asRecord(result.author);
     const name = rawAuthor ? optionalString(rawAuthor, "name") : undefined;
     if (!rawAuthor || name === undefined) return null;
+    const avatar = optionalSafeUrl(rawAuthor, "avatar", true);
+    const pendant = optionalSafeUrl(rawAuthor, "pendant", true);
+    if (avatar === null || pendant === null) return null;
     author = {
       name,
-      avatar: optionalString(rawAuthor, "avatar"),
-      pendant: optionalString(rawAuthor, "pendant"),
+      avatar,
+      pendant,
       description: optionalString(rawAuthor, "description"),
     };
   }
 
   const stats = parseStats(result.stats);
   if (result.stats !== undefined && stats === null) return null;
+
+  const url = result.url === null ? null : optionalSafeUrl(result, "url");
+  if (url === null && result.url !== null) return null;
 
   let repost: ParserResult | null | undefined;
   if (result.repost === null) {
@@ -153,7 +171,7 @@ function parseResult(value: unknown, depth = 0): ParserResult | null {
     title: optionalNullableString(result, "title"),
     text: optionalNullableString(result, "text"),
     timestamp: optionalNullableNumber(result, "timestamp"),
-    url: optionalNullableString(result, "url"),
+    url,
     contentType: optionalNullableString(result, "contentType"),
     contents: contents as ParserMedia[],
     graphics: graphics as ParserGraphic[],
@@ -171,7 +189,7 @@ export function parseParserScreenshotData(value: unknown): ParserScreenshotData 
   const maxGridImages = data.maxGridImages;
   if (
     maxGridImages !== undefined &&
-    (typeof maxGridImages !== "number" || !Number.isInteger(maxGridImages) || maxGridImages < 1)
+    (typeof maxGridImages !== "number" || !Number.isInteger(maxGridImages) || maxGridImages < 1 || maxGridImages > 9)
   ) {
     return null;
   }

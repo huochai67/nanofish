@@ -73,7 +73,7 @@ export default function ImageSearchPage() {
   const [data, setData] = useState<ImageSearchData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
-  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
+  const { status, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -95,7 +95,7 @@ export default function ImageSearchPage() {
   return (
     <div
       className="min-h-screen bg-slate-50 text-slate-900"
-      data-ready={ready ? "true" : "false"}
+      data-ready={status}
     >
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-4xl items-center gap-3 px-5 py-4">
@@ -126,6 +126,7 @@ export default function ImageSearchPage() {
                   src={data.image}
                   alt="待搜索图片"
                   className="h-full w-full rounded-lg object-contain"
+                  referrerPolicy="no-referrer"
                   onLoad={completeAsset}
                   onError={() => {
                     setImageFailed(true);
@@ -211,9 +212,10 @@ function ResultCard({
               <img
                 src={result.thumbnail}
                 alt={`${title} 的匹配图片`}
-              className="h-full w-full object-cover"
-              onLoad={onImageLoad}
-              onError={() => {
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+                onLoad={onImageLoad}
+                onError={() => {
                 setThumbnailFailed(true);
                 onImageLoad();
               }}
@@ -249,6 +251,7 @@ function ResultCard({
                 href={result.url}
                 target="_blank"
                 rel="noreferrer"
+                aria-label={`${title}（在新标签页打开）`}
                 className="group flex min-w-0 items-center gap-1.5 text-sm font-medium text-cyan-700"
                 title={result.url}
               >

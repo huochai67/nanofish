@@ -1,4 +1,4 @@
-import { asRecord, optionalString } from "@/app/utils/data-validation";
+import { asRecord, optionalSafeUrl, optionalString } from "@/app/utils/data-validation";
 
 export interface EhGalleryItem {
   title: string;
@@ -21,7 +21,7 @@ export interface EhResultData {
 
 function parseGalleryItem(value: unknown): EhGalleryItem | null {
   const item = asRecord(value);
-  if (!item || !Array.isArray(item.tags)) return null;
+  if (!item || !Array.isArray(item.tags) || item.tags.length > 50) return null;
 
   const title = optionalString(item, "title");
   const category = optionalString(item, "category");
@@ -29,7 +29,8 @@ function parseGalleryItem(value: unknown): EhGalleryItem | null {
   const posted = optionalString(item, "posted");
   const filecount = optionalString(item, "filecount");
   const rating = optionalString(item, "rating");
-  const url = optionalString(item, "url");
+  const url = optionalSafeUrl(item, "url");
+  const thumb = optionalSafeUrl(item, "thumb", true);
   const tags = item.tags.filter((tag): tag is string => typeof tag === "string");
 
   if (
@@ -39,7 +40,8 @@ function parseGalleryItem(value: unknown): EhGalleryItem | null {
     posted === undefined ||
     filecount === undefined ||
     rating === undefined ||
-    url === undefined ||
+    !url ||
+    thumb === null ||
     tags.length !== item.tags.length
   ) {
     return null;
@@ -49,7 +51,7 @@ function parseGalleryItem(value: unknown): EhGalleryItem | null {
     title,
     title_jpn: optionalString(item, "title_jpn"),
     category,
-    thumb: optionalString(item, "thumb"),
+    thumb,
     uploader,
     posted,
     filecount,
@@ -62,7 +64,7 @@ function parseGalleryItem(value: unknown): EhGalleryItem | null {
 export function parseEhResultData(value: unknown): EhResultData | null {
   const data = asRecord(value);
   const query = data ? optionalString(data, "query") : undefined;
-  if (!data || query === undefined || !Array.isArray(data.results)) return null;
+  if (!data || query === undefined || !Array.isArray(data.results) || data.results.length > 50) return null;
 
   const results = data.results.map(parseGalleryItem);
   return results.some((result) => result === null)

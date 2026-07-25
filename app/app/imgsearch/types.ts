@@ -1,4 +1,4 @@
-import { asRecord, optionalString } from "@/app/utils/data-validation";
+import { asRecord, optionalSafeUrl, optionalString } from "@/app/utils/data-validation";
 
 export interface ImageSearchResult {
   source: string;
@@ -22,8 +22,8 @@ function parseSearchResult(value: unknown): ImageSearchResult | null {
   const source = optionalString(result, "source");
   const title = optionalString(result, "title");
   const author = optionalString(result, "author");
-  const url = optionalString(result, "url");
-  const thumbnail = optionalString(result, "thumbnail");
+  const url = optionalSafeUrl(result, "url");
+  const thumbnail = optionalSafeUrl(result, "thumbnail", true);
   const similarity = result.similarity;
 
   if (
@@ -31,11 +31,13 @@ function parseSearchResult(value: unknown): ImageSearchResult | null {
     title === undefined ||
     author === undefined ||
     url === undefined ||
-    thumbnail === undefined
+    url === null ||
+    thumbnail === undefined ||
+    thumbnail === null
   ) {
     return null;
   }
-  if (similarity !== null && (typeof similarity !== "number" || !Number.isFinite(similarity))) {
+  if (similarity !== null && (typeof similarity !== "number" || !Number.isFinite(similarity) || similarity < 0 || similarity > 100)) {
     return null;
   }
 
@@ -44,8 +46,15 @@ function parseSearchResult(value: unknown): ImageSearchResult | null {
 
 export function parseImageSearchData(value: unknown): ImageSearchData | null {
   const data = asRecord(value);
-  const image = data ? optionalString(data, "image") : undefined;
-  if (!data || image === undefined || !Array.isArray(data.results) || !Array.isArray(data.errors)) {
+  const image = data ? optionalSafeUrl(data, "image", true) : undefined;
+  if (
+    !data ||
+    image === null ||
+    !Array.isArray(data.results) ||
+    data.results.length > 50 ||
+    !Array.isArray(data.errors) ||
+    data.errors.length > 20
+  ) {
     return null;
   }
 
@@ -55,7 +64,7 @@ export function parseImageSearchData(value: unknown): ImageSearchData | null {
     return null;
   }
 
-  return { image, results: results as ImageSearchResult[], errors };
+  return { image: image ?? "", results: results as ImageSearchResult[], errors };
 }
 
 export const MockImageSearchData: ImageSearchData = {

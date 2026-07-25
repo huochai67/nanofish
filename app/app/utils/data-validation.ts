@@ -9,7 +9,30 @@ export function optionalString(
   key: string,
 ): string | undefined {
   const field = value[key];
-  return typeof field === "string" ? field : undefined;
+  return typeof field === "string" && field.length <= 20_000 ? field : undefined;
+}
+
+export function optionalSafeUrl(
+  value: Record<string, unknown>,
+  key: string,
+  allowDataImage = false,
+): string | null | undefined {
+  const field = value[key];
+  if (field === undefined) return undefined;
+  if (typeof field !== "string" || field.length > 4_096) return null;
+  if (field === "") return undefined;
+
+  if (allowDataImage && field.startsWith("data:image/")) {
+    return field.length <= 2_000_000 && /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(field)
+      ? field
+      : null;
+  }
+
+  try {
+    return new URL(field).protocol === "https:" ? field : null;
+  } catch {
+    return null;
+  }
 }
 
 export function optionalNullableString(

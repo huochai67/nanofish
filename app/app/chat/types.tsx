@@ -1,4 +1,4 @@
-import { asRecord, optionalString } from "@/app/utils/data-validation";
+import { asRecord, optionalSafeUrl, optionalString } from "@/app/utils/data-validation";
 
 export type Role = "assistant" | "user";
 
@@ -37,8 +37,8 @@ function parseSegment(value: unknown): MessageSegment | null {
 
   if (type === "image_url") {
     const imageUrl = asRecord(segment.image_url);
-    const url = imageUrl ? optionalString(imageUrl, "url") : undefined;
-    return url === undefined ? null : { type, image_url: { url } };
+    const url = imageUrl ? optionalSafeUrl(imageUrl, "url", true) : undefined;
+    return !url ? null : { type, image_url: { url } };
   }
 
   if (type === "file") {
@@ -55,12 +55,12 @@ function parseSegment(value: unknown): MessageSegment | null {
 
 export function parseChatData(value: unknown): ChatData | null {
   const data = asRecord(value);
-  if (!data || !Array.isArray(data.messages)) return null;
+  if (!data || !Array.isArray(data.messages) || data.messages.length > 100) return null;
 
   const messages: ChatMessage[] = [];
   for (const value of data.messages) {
     const message = asRecord(value);
-    if (!message || !Array.isArray(message.content)) return null;
+    if (!message || !Array.isArray(message.content) || message.content.length > 20) return null;
     const role = message.role;
     if (role !== "assistant" && role !== "user") return null;
 

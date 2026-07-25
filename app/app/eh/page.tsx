@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { AlertCircle, BookOpen, ExternalLink, ImageOff, Star, User, FileText } from "lucide-react";
 import { Card } from "@heroui/react";
 import { QRCodeSVG } from "qrcode.react";
@@ -97,6 +97,7 @@ const TAG_FOLD_LIMIT = 12;
 
 function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
   const [expanded, setExpanded] = useState(false);
+  const contentId = useId();
 
   if (!tags.length) return null;
 
@@ -106,7 +107,7 @@ function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
   const hiddenCount = tags.length - visible.length;
 
   return (
-    <div className="flex flex-wrap gap-1.5 pt-1">
+    <div id={contentId} className="flex flex-wrap gap-1.5 pt-1">
       {visible.map((tag) => (
         <TagChip key={tag} raw={tag} dict={dict} />
       ))}
@@ -114,6 +115,8 @@ function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
+          aria-expanded="false"
+          aria-controls={contentId}
           className="rounded-full bg-zinc-900 px-2.5 py-0.5 text-[11px] font-medium text-white ring-1 ring-inset ring-zinc-800"
           title={`展开剩余 ${hiddenCount} 个标签`}
         >
@@ -124,6 +127,8 @@ function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
         <button
           type="button"
           onClick={() => setExpanded(false)}
+          aria-expanded="true"
+          aria-controls={contentId}
           className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-[11px] font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300"
         >
           收起
@@ -137,25 +142,26 @@ export default function EhResultsPage() {
   const [data, setData] = useState<EhResultData | null>(null);
   const [dict, setDict] = useState<TagDict>({});
   const [error, setError] = useState<string | null>(null);
-  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
+  const { status, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const [loadedData, tagDict] = await Promise.all([
-        Promise.resolve(loadEhData()),
-        loadTagDict(),
-      ]);
+    const controller = new AbortController();
+    void Promise.resolve().then(() => {
+      const loadedData = loadEhData();
       if (cancelled) return;
       setData(loadedData.data);
-      setDict(tagDict);
       setError(loadedData.error);
       beginAssetTracking(
         loadedData.data.results.filter((item) => Boolean(item.thumb)).length,
       );
-    })();
+    });
+    void loadTagDict(controller.signal).then((tagDict) => {
+      if (!cancelled) setDict(tagDict);
+    });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [beginAssetTracking]);
 
@@ -166,7 +172,7 @@ export default function EhResultsPage() {
   return (
     <div
       className="min-h-screen bg-zinc-50 text-zinc-900"
-      data-ready={ready ? "true" : "false"}
+      data-ready={status}
     >
       <header className="border-b border-zinc-200 bg-white px-6 py-4">
         <div className="mx-auto flex max-w-4xl items-center gap-3">
@@ -232,6 +238,7 @@ function ResultCard({
                   src={item.thumb}
                   alt={`${item.title} 的封面`}
                   className="h-full w-full object-cover"
+                  referrerPolicy="no-referrer"
                   onLoad={onAsset}
                   onError={() => {
                     setImgFailed(true);
@@ -265,7 +272,7 @@ function ResultCard({
         <div className="flex min-w-0 flex-1 flex-col space-y-2">
           <div className="flex flex-wrap items-start gap-2">
             <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-[11px] font-medium text-white">
-              #{index}
+              #{index + 1}
             </span>
             <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-800">
               {item.category || "Unknown"}
@@ -305,6 +312,7 @@ function ResultCard({
                 href={item.url}
                 target="_blank"
                 rel="noreferrer"
+                aria-label={`${item.title}（在新标签页打开）`}
                 className="inline-flex items-start gap-1 font-mono text-[11px] break-all text-zinc-500 hover:text-zinc-900 hover:underline"
               >
                 {item.url}

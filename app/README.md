@@ -21,7 +21,7 @@ await page.addInitScript((data) => {
   window.__CHAT_DATA__ = data;
 }, chatData);
 await page.goto("http://localhost:3000/chat");
-await page.locator('[data-ready="true"]').waitFor();
+await page.locator('[data-ready="ready"]').waitFor();
 ```
 
 Available globals:
@@ -35,6 +35,6 @@ All pages also accept `?data=<utf8-base64-json>` for short, local preview payloa
 
 ## Screenshot readiness
 
-Pages expose `data-ready="false"` until their visible remote media either loads, fails, or reaches the 10-second timeout. Screenshot automation should wait for `data-ready="true"` rather than a fixed delay.
+Pages expose `data-ready="pending"` until visible remote media and fonts load. Screenshot automation should wait for `data-ready="ready"` rather than a fixed delay. `data-ready="timeout"` means a remote asset exceeded 10 seconds and the screenshot should be retried or failed rather than captured with unstable pixels.
 
 Payloads from either source are validated at the page boundary. Invalid payloads fall back to the page Mock data and display an error notice.

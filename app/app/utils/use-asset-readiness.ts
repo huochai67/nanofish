@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const ASSET_TIMEOUT_MS = 10_000;
+export type AssetReadiness = "pending" | "ready" | "timeout";
 
 export function useAssetReadiness() {
-  const [ready, setReady] = useState(false);
+  const [status, setStatus] = useState<AssetReadiness>("pending");
   const pendingAssets = useRef(0);
   const timeout = useRef<number | null>(null);
+  const fontsReady = useRef(false);
+  const timedOut = useRef(false);
 
   const clearTimeout = useCallback(() => {
     if (timeout.current !== null) {
@@ -16,33 +19,49 @@ export function useAssetReadiness() {
     }
   }, []);
 
+  const markReadyIfComplete = useCallback(() => {
+    if (!timedOut.current && fontsReady.current && pendingAssets.current === 0) {
+      setStatus("ready");
+    }
+  }, []);
+
   const completeAsset = useCallback(() => {
-    if (pendingAssets.current <= 0) return;
+    if (timedOut.current || pendingAssets.current <= 0) return;
 
     pendingAssets.current -= 1;
     if (pendingAssets.current === 0) {
       clearTimeout();
-      setReady(true);
+      markReadyIfComplete();
     }
-  }, [clearTimeout]);
+  }, [clearTimeout, markReadyIfComplete]);
 
   const beginAssetTracking = useCallback(
     (count: number) => {
       clearTimeout();
       pendingAssets.current = count;
-      setReady(count === 0);
+      timedOut.current = false;
+      setStatus("pending");
 
       if (count > 0) {
         timeout.current = window.setTimeout(() => {
-          pendingAssets.current = 0;
-          setReady(true);
+          timedOut.current = true;
+          setStatus("timeout");
         }, ASSET_TIMEOUT_MS);
+      } else {
+        markReadyIfComplete();
       }
     },
-    [clearTimeout],
+    [clearTimeout, markReadyIfComplete],
   );
 
-  useEffect(() => clearTimeout, [clearTimeout]);
+  useEffect(() => {
+    void document.fonts.ready.then(() => {
+      fontsReady.current = true;
+      markReadyIfComplete();
+    });
 
-  return { ready, beginAssetTracking, completeAsset };
+    return clearTimeout;
+  }, [clearTimeout, markReadyIfComplete]);
+
+  return { status, beginAssetTracking, completeAsset };
 }
