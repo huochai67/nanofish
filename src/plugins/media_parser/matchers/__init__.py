@@ -4,6 +4,7 @@ from typing import TypeVar
 from nonebot import get_driver, logger, on_command
 from nonebot.adapters import Message
 from nonebot.params import CommandArg
+from nonebot_plugin_alconna.uniseg import File, Video, Voice
 
 from ..config import pconfig
 from ..delivery import deliver_parse_result
@@ -83,7 +84,10 @@ async def parser_handler(
 
     # 3. 渲染内容消息并发送
     async for message in deliver_parse_result(result):
-        await UniHelper.reply_to_current_event(message).send()
+        if message.has(Video) or message.has(Voice) or message.has(File):
+            await message.send()
+        else:
+            await UniHelper.reply_to_current_event(message).send()
 
     # 4. 缓存解析结果
     _RESULT_CACHE[cache_key] = result
