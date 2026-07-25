@@ -1,3 +1,5 @@
+import { asRecord, optionalString } from "@/app/utils/data-validation";
+
 export interface EhGalleryItem {
   title: string;
   title_jpn?: string;
@@ -15,6 +17,57 @@ export interface EhGalleryItem {
 export interface EhResultData {
   query: string;
   results: EhGalleryItem[];
+}
+
+function parseGalleryItem(value: unknown): EhGalleryItem | null {
+  const item = asRecord(value);
+  if (!item || !Array.isArray(item.tags)) return null;
+
+  const title = optionalString(item, "title");
+  const category = optionalString(item, "category");
+  const uploader = optionalString(item, "uploader");
+  const posted = optionalString(item, "posted");
+  const filecount = optionalString(item, "filecount");
+  const rating = optionalString(item, "rating");
+  const url = optionalString(item, "url");
+  const tags = item.tags.filter((tag): tag is string => typeof tag === "string");
+
+  if (
+    title === undefined ||
+    category === undefined ||
+    uploader === undefined ||
+    posted === undefined ||
+    filecount === undefined ||
+    rating === undefined ||
+    url === undefined ||
+    tags.length !== item.tags.length
+  ) {
+    return null;
+  }
+
+  return {
+    title,
+    title_jpn: optionalString(item, "title_jpn"),
+    category,
+    thumb: optionalString(item, "thumb"),
+    uploader,
+    posted,
+    filecount,
+    rating,
+    tags,
+    url,
+  };
+}
+
+export function parseEhResultData(value: unknown): EhResultData | null {
+  const data = asRecord(value);
+  const query = data ? optionalString(data, "query") : undefined;
+  if (!data || query === undefined || !Array.isArray(data.results)) return null;
+
+  const results = data.results.map(parseGalleryItem);
+  return results.some((result) => result === null)
+    ? null
+    : { query, results: results as EhGalleryItem[] };
 }
 
 export const MockEhData: EhResultData = {

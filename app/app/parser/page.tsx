@@ -1,9 +1,10 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   AudioLines,
+  AlertCircle,
   ChevronRight,
   CircleUserRound,
   Clapperboard,
@@ -22,7 +23,14 @@ import {
   ThumbsUp,
   type LucideIcon,
 } from "lucide-react";
-import { MockParserData, type ParserResult, type ParserScreenshotData } from "./types";
+import {
+  MockParserData,
+  parseParserScreenshotData,
+  type ParserResult,
+  type ParserScreenshotData,
+} from "./types";
+import { parseUrlData } from "../utils/url-data";
+import { useAssetReadiness } from "../utils/use-asset-readiness";
 
 declare global {
   interface Window {
@@ -140,35 +148,58 @@ const DEFAULT_THEME: Theme = {
   Icon: Share2,
 };
 
-function loadParserData(): ParserScreenshotData {
+function loadParserData(): { data: ParserScreenshotData; error: string | null } {
   if (typeof window !== "undefined" && window.__PARSER_DATA__) {
-    return window.__PARSER_DATA__;
+    const data = parseParserScreenshotData(window.__PARSER_DATA__);
+    return data
+      ? { data, error: null }
+      : { data: MockParserData, error: "注入的解析数据无效，已回退到默认 Mock 数据。" };
   }
 
   if (typeof window !== "undefined") {
     const value = new URLSearchParams(window.location.search).get("data");
     if (value) {
-      try {
-        return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(value))))) as ParserScreenshotData;
-      } catch (error) {
-        console.error("Failed to parse parser screenshot data", error);
-      }
+      const parsed = parseUrlData(value, parseParserScreenshotData);
+      return parsed.data
+        ? { data: parsed.data, error: null }
+        : { data: MockParserData, error: "URL 参数无效，已回退到默认 Mock 数据。" };
     }
   }
 
-  return MockParserData;
+  return { data: MockParserData, error: null };
 }
 
-function imageCount(result: ParserResult): number {
-  const contentImages = result.contents.filter(
-    (content) =>
-      (content.kind === "image" && Boolean(content.src)) ||
-      (content.kind === "video" && Boolean(content.poster)),
-  ).length;
-  const graphics = result.graphics.filter(
-    (graphic) => graphic.kind === "image" && Boolean(graphic.src),
-  ).length;
-  return Number(Boolean(result.author?.avatar)) + Number(Boolean(result.author?.pendant)) + contentImages + graphics + (result.repost ? imageCount(result.repost) : 0);
+function imageCount(result: ParserResult, repost = false, maxGridImages = 9): number {
+  const video = result.contents.find((content) => content.kind === "video");
+  const images = result.contents.filter(
+    (content): content is Extract<ParserResult["contents"][number], { kind: "image" }> =>
+      content.kind === "image" && Boolean(content.src),
+  );
+  const visibleImages = Math.min(images.length, maxGridImages);
+
+  if (!repost && result.platform.name === "bilibili") {
+    return (
+      1 +
+      Number(Boolean(result.author?.pendant)) +
+      (video?.kind === "video" && video.poster ? 1 : Math.min(images.length, 9))
+    );
+  }
+
+  if (!repost && result.platform.name === "xiaohongshu") {
+    return 1 + Number(Boolean(video?.kind === "video" ? video.poster : images[0]?.src));
+  }
+
+  const graphics = !video && images.length === 0
+    ? result.graphics.filter((graphic) => graphic.kind === "image" && Boolean(graphic.src)).length
+    : 0;
+  const platformLogo = Number(Boolean((THEMES[result.platform.name] ?? DEFAULT_THEME).logo));
+  return (
+    platformLogo +
+    Number(Boolean(result.author?.avatar)) +
+    (video?.kind === "video" && video.poster ? 1 : visibleImages) +
+    graphics +
+    (result.repost ? imageCount(result.repost, true, maxGridImages) : 0)
+  );
 }
 
 function formatTime(timestamp?: number | null): string | null {
@@ -203,38 +234,20 @@ function XiaohongshuText({ text }: { text: string }) {
 
 export default function ParserPage() {
   const [data, setData] = useState<ParserScreenshotData | null>(null);
-  const [ready, setReady] = useState(false);
-  const pendingAssets = useRef(0);
-  const timeout = useRef<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
-      const parserData = loadParserData();
-      pendingAssets.current = imageCount(parserData.result);
-      setData(parserData);
-      if (pendingAssets.current === 0) {
-        setReady(true);
-        return;
-      }
-      timeout.current = window.setTimeout(() => {
-        pendingAssets.current = 0;
-        setReady(true);
-      }, 10_000);
+      const loadedData = loadParserData();
+      setData(loadedData.data);
+      setError(loadedData.error);
+      beginAssetTracking(
+        imageCount(loadedData.data.result, false, loadedData.data.maxGridImages ?? 9),
+      );
     });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      if (timeout.current !== null) window.clearTimeout(timeout.current);
-    };
-  }, []);
-
-  const completeAsset = () => {
-    if (pendingAssets.current <= 0) return;
-    pendingAssets.current -= 1;
-    if (pendingAssets.current === 0) {
-      if (timeout.current !== null) window.clearTimeout(timeout.current);
-      setReady(true);
-    }
-  };
+    return () => window.cancelAnimationFrame(frame);
+  }, [beginAssetTracking]);
 
   if (!data) return <div className="min-h-screen" data-ready="false" />;
 
@@ -246,6 +259,12 @@ export default function ParserPage() {
       style={{ background: theme.background }}
     >
       <section className="mx-auto max-w-[760px]">
+        {error ? (
+          <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <p>{error}</p>
+          </div>
+        ) : null}
         <ParserCard
           result={data.result}
           theme={theme}
@@ -302,7 +321,13 @@ function ParserCard({
         <div className={`flex items-center justify-between border-b px-5 py-3 ${dark ? "border-white/10" : "border-slate-100"}`}>
         <div className="flex items-center gap-2">
           {theme.logo ? (
-            <img src={theme.logo} alt="" className="h-6 max-w-24 object-contain" />
+            <img
+              src={theme.logo}
+              alt=""
+              className="h-6 max-w-24 object-contain"
+              onLoad={onAsset}
+              onError={onAsset}
+            />
           ) : (
             <Icon size={18} strokeWidth={2.5} style={{ color: theme.accent }} />
           )}
@@ -357,7 +382,7 @@ function ParserCard({
                 <img
                   key={index}
                   src={graphic.src}
-                  alt={graphic.alt ?? ""}
+                  alt={graphic.alt ?? "解析图片"}
                   className="max-h-[560px] w-full rounded-xl object-contain"
                   onLoad={onAsset}
                   onError={onAsset}
@@ -421,7 +446,13 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
               onError={onAsset}
             />
           ) : (
-            <img src="/parser/avatar.png" alt="" className="h-11 w-11 rounded-full object-cover" />
+            <img
+              src="/parser/avatar.png"
+              alt=""
+              className="h-11 w-11 rounded-full object-cover"
+              onLoad={onAsset}
+              onError={onAsset}
+            />
           )}
           {result.author?.pendant ? (
             <img
@@ -506,7 +537,13 @@ function XiaohongshuCard({ result, onAsset }: { result: ParserResult; onAsset: (
           {result.author?.avatar ? (
             <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover" onLoad={onAsset} onError={onAsset} />
           ) : (
-            <img src="/parser/avatar.png" alt="" className="h-10 w-10 rounded-full object-cover" />
+            <img
+              src="/parser/avatar.png"
+              alt=""
+              className="h-10 w-10 rounded-full object-cover"
+              onLoad={onAsset}
+              onError={onAsset}
+            />
           )}
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#333]">{result.author?.name ?? "小红书用户"}</span>
           <span className="rounded-full bg-[#ff2442] px-5 py-2 text-sm font-medium text-white">关注</span>

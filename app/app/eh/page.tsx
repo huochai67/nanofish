@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { BookOpen, ImageOff, Star, User, FileText } from "lucide-react";
+import { AlertCircle, BookOpen, ExternalLink, ImageOff, Star, User, FileText } from "lucide-react";
 import { Card } from "@heroui/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -11,34 +11,35 @@ import {
   translateTag,
   type TagDict,
 } from "./ehtag";
-import { EhGalleryItem, EhResultData, MockEhData } from "./types";
+import { EhGalleryItem, EhResultData, MockEhData, parseEhResultData } from "./types";
+import { parseUrlData } from "../utils/url-data";
+import { useAssetReadiness } from "../utils/use-asset-readiness";
 declare global {
   interface Window {
     __EH_DATA__?: EhResultData;
   }
 }
 
-function loadEhData(): EhResultData {
+function loadEhData(): { data: EhResultData; error: string | null } {
   if (typeof window !== "undefined" && window.__EH_DATA__) {
-    return window.__EH_DATA__;
+    const data = parseEhResultData(window.__EH_DATA__);
+    return data
+      ? { data, error: null }
+      : { data: MockEhData, error: "注入的搜索数据无效，已回退到默认 Mock 数据。" };
   }
 
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const dataParam = params.get("data");
     if (dataParam) {
-      try {
-        const decoded = atob(decodeURIComponent(dataParam));
-        // utf-8 safe: reverse of btoa(unescape(encodeURIComponent(json)))
-        const json = decodeURIComponent(escape(decoded));
-        return JSON.parse(json) as EhResultData;
-      } catch (e) {
-        console.error("Failed to parse URL data", e);
-      }
+      const parsed = parseUrlData(dataParam, parseEhResultData);
+      return parsed.data
+        ? { data: parsed.data, error: null }
+        : { data: MockEhData, error: "URL 参数无效，已回退到默认 Mock 数据。" };
     }
   }
 
-  return MockEhData;
+  return { data: MockEhData, error: null };
 }
 
 function formatPosted(posted: string): string {
@@ -135,25 +136,28 @@ function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
 export default function EhResultsPage() {
   const [data, setData] = useState<EhResultData | null>(null);
   const [dict, setDict] = useState<TagDict>({});
-  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [ehData, tagDict] = await Promise.all([
+      const [loadedData, tagDict] = await Promise.all([
         Promise.resolve(loadEhData()),
         loadTagDict(),
       ]);
       if (cancelled) return;
-      setData(ehData);
+      setData(loadedData.data);
       setDict(tagDict);
-      // Mark ready after dict + data so Playwright screenshots get translated tags
-      setReady(true);
+      setError(loadedData.error);
+      beginAssetTracking(
+        loadedData.data.results.filter((item) => Boolean(item.thumb)).length,
+      );
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [beginAssetTracking]);
 
   if (!data) {
     return <div className="min-h-screen bg-zinc-50" data-ready="false" />;
@@ -181,6 +185,12 @@ export default function EhResultsPage() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-4 p-6 pb-16">
+        {error ? (
+          <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
+            <AlertCircle size={16} className="mt-0.5 shrink-0" />
+            <p>{error}</p>
+          </div>
+        ) : null}
         {data.results.length === 0 ? (
           <p className="text-center text-zinc-500">无结果</p>
         ) : (
@@ -190,6 +200,7 @@ export default function EhResultsPage() {
               index={idx}
               item={item}
               dict={dict}
+              onAsset={completeAsset}
             />
           ))
         )}
@@ -202,10 +213,12 @@ function ResultCard({
   index,
   item,
   dict,
+  onAsset,
 }: {
   index: number;
   item: EhGalleryItem;
   dict: TagDict;
+  onAsset: () => void;
 }) {
   const [imgFailed, setImgFailed] = useState(!item.thumb);
 
@@ -215,11 +228,15 @@ function ResultCard({
         <div className="flex w-28 shrink-0 flex-col items-center gap-2">
           <div className="h-36 w-28 overflow-hidden rounded-lg bg-zinc-100">
             {!imgFailed && item.thumb ? (
-              <img
-                src={item.thumb}
-                alt=""
-                className="h-full w-full object-cover"
-                onError={() => setImgFailed(true)}
+                <img
+                  src={item.thumb}
+                  alt={`${item.title} 的封面`}
+                  className="h-full w-full object-cover"
+                  onLoad={onAsset}
+                  onError={() => {
+                    setImgFailed(true);
+                    onAsset();
+                  }}
               />
             ) : (
               <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-zinc-400">
@@ -229,7 +246,7 @@ function ResultCard({
             )}
           </div>
           {item.url ? (
-            <div className="flex w-full flex-col items-center gap-1">
+            <div className="hidden w-full flex-col items-center gap-1 sm:flex">
               <div className="rounded-md border border-zinc-200 bg-white p-1">
                 <QRCodeSVG
                   value={item.url}
@@ -284,9 +301,15 @@ function ResultCard({
 
           {item.url ? (
             <div className="mt-auto rounded-md border border-zinc-100 bg-zinc-50 px-2.5 py-1.5">
-              <p className="font-mono text-[11px] break-all text-zinc-500">
+              <a
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-start gap-1 font-mono text-[11px] break-all text-zinc-500 hover:text-zinc-900 hover:underline"
+              >
                 {item.url}
-              </p>
+                <ExternalLink size={12} className="mt-0.5 shrink-0" aria-hidden />
+              </a>
             </div>
           ) : null}
         </div>

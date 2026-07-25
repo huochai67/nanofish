@@ -1,36 +1,40 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# nanofish frontend previews
 
-## Getting Started
+Screenshot-oriented Next.js views for chat messages, EH search, reverse image search, and parsed social-media links.
 
-First, run the development server:
+## Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run build
+npm run start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+`dev` and `build` refresh the EH tag dictionary before starting Next.js.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Data injection
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Each page uses its built-in Mock data when no payload is supplied. For screenshot automation, inject data before navigation:
 
-## Learn More
+```ts
+await page.addInitScript((data) => {
+  window.__CHAT_DATA__ = data;
+}, chatData);
+await page.goto("http://localhost:3000/chat");
+await page.locator('[data-ready="true"]').waitFor();
+```
 
-To learn more about Next.js, take a look at the following resources:
+Available globals:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `/chat`: `window.__CHAT_DATA__`
+- `/eh`: `window.__EH_DATA__`
+- `/imgsearch`: `window.__IMGSEARCH_DATA__`
+- `/parser`: `window.__PARSER_DATA__`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+All pages also accept `?data=<utf8-base64-json>` for short, local preview payloads. The home page generates this URL format. Do not use it for large messages, base64 media, or production sharing: browser and proxy URL limits make injected data the reliable option.
 
-## Deploy on Vercel
+## Screenshot readiness
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Pages expose `data-ready="false"` until their visible remote media either loads, fails, or reaches the 10-second timeout. Screenshot automation should wait for `data-ready="true"` rather than a fixed delay.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Payloads from either source are validated at the page boundary. Invalid payloads fall back to the page Mock data and display an error notice.

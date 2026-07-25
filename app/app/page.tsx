@@ -13,6 +13,7 @@ import {
   Clapperboard,
 } from "lucide-react";
 import { Card } from "@heroui/react";
+import { encodeUrlData } from "./utils/url-data";
 import { MockChatData } from "./chat/types";
 import { MockEhData } from "./eh/types";
 import { MockImageSearchData } from "./imgsearch/types";
@@ -86,11 +87,6 @@ const PAGES: PageEntry[] = [
   },
 ];
 
-function encodeMockQuery(data: unknown): string {
-  const json = JSON.stringify(data);
-  return btoa(unescape(encodeURIComponent(json)));
-}
-
 const primaryBtnClass =
   "inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800";
 const secondaryBtnClass =
@@ -159,7 +155,7 @@ export default function Home() {
 
 function PageCard({ page }: { page: PageEntry }) {
   const mockQueryHref = page.supportsDataQuery
-    ? `${page.href}?data=${encodeURIComponent(encodeMockQuery(page.mockPreview))}`
+    ? `${page.href}?data=${encodeURIComponent(encodeUrlData(page.mockPreview))}`
     : page.href;
 
   return (

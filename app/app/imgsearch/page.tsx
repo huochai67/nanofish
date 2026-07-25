@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@heroui/react";
 import { QRCodeSVG } from "qrcode.react";
 import {
@@ -11,7 +11,14 @@ import {
   Sparkles,
   UserRound,
 } from "lucide-react";
-import { ImageSearchData, ImageSearchResult, MockImageSearchData } from "./types";
+import {
+  ImageSearchData,
+  ImageSearchResult,
+  MockImageSearchData,
+  parseImageSearchData,
+} from "./types";
+import { parseUrlData } from "../utils/url-data";
+import { useAssetReadiness } from "../utils/use-asset-readiness";
 
 declare global {
   interface Window {
@@ -19,24 +26,25 @@ declare global {
   }
 }
 
-function loadImageSearchData(): ImageSearchData {
+function loadImageSearchData(): { data: ImageSearchData; error: string | null } {
   if (typeof window !== "undefined" && window.__IMGSEARCH_DATA__) {
-    return window.__IMGSEARCH_DATA__;
+    const data = parseImageSearchData(window.__IMGSEARCH_DATA__);
+    return data
+      ? { data, error: null }
+      : { data: MockImageSearchData, error: "注入的搜图数据无效，已回退到默认 Mock 数据。" };
   }
 
   if (typeof window !== "undefined") {
     const dataParam = new URLSearchParams(window.location.search).get("data");
     if (dataParam) {
-      try {
-        const binary = atob(decodeURIComponent(dataParam));
-        return JSON.parse(decodeURIComponent(escape(binary))) as ImageSearchData;
-      } catch (error) {
-        console.error("Failed to parse image search URL data", error);
-      }
+      const parsed = parseUrlData(dataParam, parseImageSearchData);
+      return parsed.data
+        ? { data: parsed.data, error: null }
+        : { data: MockImageSearchData, error: "URL 参数无效，已回退到默认 Mock 数据。" };
     }
   }
 
-  return MockImageSearchData;
+  return { data: MockImageSearchData, error: null };
 }
 
 function similarityLabel(similarity: number | null): string {
@@ -63,51 +71,22 @@ function displayUrl(value: string): string {
 
 export default function ImageSearchPage() {
   const [data, setData] = useState<ImageSearchData | null>(null);
-  const [ready, setReady] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
-  const pendingImageCount = useRef(0);
-  const readyTimeout = useRef<number | null>(null);
-
-  const completeImageLoad = () => {
-    if (pendingImageCount.current <= 0) return;
-    pendingImageCount.current -= 1;
-    if (pendingImageCount.current === 0) {
-      if (readyTimeout.current !== null) {
-        window.clearTimeout(readyTimeout.current);
-      }
-      setReady(true);
-    }
-  };
+  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
-    let cancelled = false;
-    void Promise.resolve().then(() => {
-      if (cancelled) return;
-      const imageSearchData = loadImageSearchData();
-      const imageCount =
-        Number(Boolean(imageSearchData.image)) +
-        imageSearchData.results.filter((result) => Boolean(result.thumbnail)).length;
-      pendingImageCount.current = imageCount;
-      setData(imageSearchData);
-
-      if (imageCount === 0) {
-        setReady(true);
-        return;
-      }
-
-      // Do not hold the bot response forever when a remote image stalls.
-      readyTimeout.current = window.setTimeout(() => {
-        pendingImageCount.current = 0;
-        setReady(true);
-      }, 10_000);
+    const frame = window.requestAnimationFrame(() => {
+      const loadedData = loadImageSearchData();
+      setData(loadedData.data);
+      setLoadError(loadedData.error);
+      beginAssetTracking(
+        Number(Boolean(loadedData.data.image)) +
+          loadedData.data.results.filter((result) => Boolean(result.thumbnail)).length,
+      );
     });
-    return () => {
-      cancelled = true;
-      if (readyTimeout.current !== null) {
-        window.clearTimeout(readyTimeout.current);
-      }
-    };
-  }, []);
+    return () => window.cancelAnimationFrame(frame);
+  }, [beginAssetTracking]);
 
   if (!data) {
     return <div className="min-h-screen bg-slate-50" data-ready="false" />;
@@ -147,10 +126,10 @@ export default function ImageSearchPage() {
                   src={data.image}
                   alt="待搜索图片"
                   className="h-full w-full rounded-lg object-contain"
-                  onLoad={completeImageLoad}
+                  onLoad={completeAsset}
                   onError={() => {
                     setImageFailed(true);
-                    completeImageLoad();
+                    completeAsset();
                   }}
                 />
               ) : (
@@ -184,7 +163,7 @@ export default function ImageSearchPage() {
                   key={`${result.url}-${index}`}
                   index={index}
                   result={result}
-                  onImageLoad={completeImageLoad}
+                  onImageLoad={completeAsset}
                 />
               ))
             ) : (
@@ -198,6 +177,11 @@ export default function ImageSearchPage() {
               <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <p className="font-medium">部分搜索来源不可用</p>
                 <p className="mt-1 text-xs text-amber-800">{data.errors.join("；")}</p>
+              </section>
+            ) : null}
+            {loadError ? (
+              <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {loadError}
               </section>
             ) : null}
           </section>
@@ -224,9 +208,9 @@ function ResultCard({
       <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
         <div className="relative flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-36 sm:w-28">
           {!thumbnailFailed ? (
-            <img
-              src={result.thumbnail}
-              alt="匹配图片"
+              <img
+                src={result.thumbnail}
+                alt={`${title} 的匹配图片`}
               className="h-full w-full object-cover"
               onLoad={onImageLoad}
               onError={() => {
@@ -271,7 +255,7 @@ function ResultCard({
                 <ExternalLink className="shrink-0" size={14} />
                 <span className="truncate group-hover:underline">{displayUrl(result.url)}</span>
               </a>
-              <div className="flex shrink-0 items-center gap-2 text-right text-[10px] font-medium text-slate-400">
+              <div className="hidden shrink-0 items-center gap-2 text-right text-[10px] font-medium text-slate-400 sm:flex">
                 <span className="hidden sm:inline">扫码打开</span>
                 <div className="rounded-md border border-slate-200 bg-white p-1">
                   <QRCodeSVG

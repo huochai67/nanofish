@@ -10,6 +10,7 @@ import {
   MessageSquare,
   Share2,
   FileText,
+  ImageOff,
   AlertCircle,
   Check,
 } from "lucide-react";
@@ -18,8 +19,11 @@ import {
   ChatMessage,
   MessageSegment,
   MockChatData,
+  parseChatData,
   Role,
 } from "./types";
+import { parseUrlData, encodeUrlData } from "../utils/url-data";
+import { useAssetReadiness } from "../utils/use-asset-readiness";
 
 declare global {
   interface Window {
@@ -29,25 +33,20 @@ declare global {
 
 function loadChatData(): { data: ChatData; error: string | null } {
   if (typeof window !== "undefined" && window.__CHAT_DATA__) {
-    return { data: window.__CHAT_DATA__, error: null };
+    const data = parseChatData(window.__CHAT_DATA__);
+    return data
+      ? { data, error: null }
+      : { data: MockChatData, error: "注入的对话数据无效，已回退到默认 Mock 对话。" };
   }
 
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const dataParam = params.get("data");
     if (dataParam) {
-      try {
-        // Matches btoa(unescape(encodeURIComponent(json))) used when sharing
-        const binary = atob(decodeURIComponent(dataParam));
-        const json = decodeURIComponent(escape(binary));
-        return { data: JSON.parse(json) as ChatData, error: null };
-      } catch (e) {
-        console.error("Failed to parse URL data", e);
-        return {
-          data: MockChatData,
-          error: "URL 参数无效，已回退到默认 Mock 对话。",
-        };
-      }
+      const parsed = parseUrlData(dataParam, parseChatData);
+      return parsed.data
+        ? { data: parsed.data, error: null }
+        : { data: MockChatData, error: "URL 参数无效，已回退到默认 Mock 对话。" };
     }
   }
 
@@ -57,22 +56,32 @@ function loadChatData(): { data: ChatData; error: string | null } {
 export default function ChatPage() {
   const [chatData, setChatData] = useState<ChatData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { ready, beginAssetTracking, completeAsset } = useAssetReadiness();
 
   useEffect(() => {
-    const { data, error: loadError } = loadChatData();
-    setChatData(data);
-    setError(loadError);
-    setReady(true);
-  }, []);
+    const frame = window.requestAnimationFrame(() => {
+      const { data, error: loadError } = loadChatData();
+      setChatData(data);
+      setError(loadError);
+      beginAssetTracking(
+        data.messages.reduce(
+          (count, message) =>
+            count +
+            message.content.filter(
+              (segment) => segment.type === "image_url" && Boolean(segment.image_url?.url),
+            ).length,
+          0,
+        ),
+      );
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [beginAssetTracking]);
 
   const copyShareUrl = async () => {
     if (!chatData) return;
-    const json = JSON.stringify(chatData);
-    const base64 = btoa(unescape(encodeURIComponent(json)));
     const url = new URL(window.location.href);
-    url.searchParams.set("data", base64);
+    url.searchParams.set("data", encodeUrlData(chatData));
     try {
       await navigator.clipboard.writeText(url.toString());
       setCopied(true);
@@ -110,6 +119,7 @@ export default function ChatPage() {
           <button
             type="button"
             onClick={copyShareUrl}
+            aria-label="复制带数据的分享链接"
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900"
             title="复制带数据的分享链接"
           >
@@ -128,7 +138,7 @@ export default function ChatPage() {
         ) : null}
 
         {chatData.messages.map((msg, idx) => (
-          <MessageRow key={idx} message={msg} index={idx} />
+          <MessageRow key={idx} message={msg} index={idx} onAsset={completeAsset} />
         ))}
       </main>
     </div>
@@ -156,9 +166,11 @@ const ROLE_META: Record<
 function MessageRow({
   message,
   index,
+  onAsset,
 }: {
   message: ChatMessage;
   index: number;
+  onAsset: () => void;
 }) {
   const meta = ROLE_META[message.role] ?? ROLE_META.user;
   const isUser = meta.side === "right";
@@ -195,7 +207,7 @@ function MessageRow({
         >
           <div className="flex flex-col gap-2.5">
             {message.content.map((segment, i) => (
-              <SegmentView key={i} segment={segment} isUser={isUser} />
+              <SegmentView key={i} segment={segment} isUser={isUser} onAsset={onAsset} />
             ))}
           </div>
         </div>
@@ -207,9 +219,11 @@ function MessageRow({
 function SegmentView({
   segment,
   isUser,
+  onAsset,
 }: {
   segment: MessageSegment;
   isUser: boolean;
+  onAsset: () => void;
 }) {
   if (segment.type === "text") {
     return (
@@ -225,13 +239,7 @@ function SegmentView({
     const url = segment.image_url?.url;
     if (!url) return null;
     return (
-      <figure className="overflow-hidden rounded-xl">
-        <img
-          src={url}
-          alt=""
-          className="max-h-72 w-auto max-w-full object-contain"
-        />
-      </figure>
+      <ImageSegment url={url} onAsset={onAsset} />
     );
   }
 
@@ -274,4 +282,32 @@ function SegmentView({
   }
 
   return null;
+}
+
+function ImageSegment({ url, onAsset }: { url: string; onAsset: () => void }) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className="flex h-28 items-center justify-center gap-2 rounded-xl bg-zinc-100 px-4 text-sm text-zinc-500">
+        <ImageOff size={18} />
+        图片不可预览
+      </div>
+    );
+  }
+
+  return (
+    <figure className="overflow-hidden rounded-xl">
+      <img
+        src={url}
+        alt="对话中的图片"
+        className="max-h-72 w-auto max-w-full object-contain"
+        onLoad={onAsset}
+        onError={() => {
+          setFailed(true);
+          onAsset();
+        }}
+      />
+    </figure>
+  );
 }
