@@ -1,7 +1,6 @@
 export type ParsedUrlData<T> =
   | { data: T; error: null }
   | { data: null; error: string };
-const MAX_URL_DATA_LENGTH = 200_000;
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -17,21 +16,13 @@ function base64ToBytes(value: string): Uint8Array {
 }
 
 export function encodeUrlData(value: unknown): string {
-  const encoded = bytesToBase64(new TextEncoder().encode(JSON.stringify(value)));
-  if (encoded.length > MAX_URL_DATA_LENGTH) {
-    throw new RangeError("URL data exceeds the sharing limit.");
-  }
-  return encoded;
+  return bytesToBase64(new TextEncoder().encode(JSON.stringify(value)));
 }
 
 export function parseUrlData<T>(
   value: string,
   validate: (data: unknown) => T | null,
 ): ParsedUrlData<T> {
-  if (value.length > MAX_URL_DATA_LENGTH) {
-    return { data: null, error: "URL data exceeds the sharing limit." };
-  }
-
   try {
     const json = new TextDecoder().decode(base64ToBytes(value));
     const data = validate(JSON.parse(json));

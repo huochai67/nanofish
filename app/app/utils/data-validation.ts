@@ -9,7 +9,7 @@ export function optionalString(
   key: string,
 ): string | undefined {
   const field = value[key];
-  return typeof field === "string" && field.length <= 20_000 ? field : undefined;
+  return typeof field === "string" ? field : undefined;
 }
 
 export function optionalSafeUrl(
@@ -23,12 +23,10 @@ export function optionalSafeUrl(
 
   // Parser assets are injected as local data URLs, not fetched remotely.
   if (allowDataImage && field.startsWith("data:image/")) {
-    return field.length <= 2_000_000 && /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(field)
+    return /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(field)
       ? field
       : null;
   }
-
-  if (field.length > 4_096) return null;
 
   try {
     return new URL(field).protocol === "https:" ? field : null;
