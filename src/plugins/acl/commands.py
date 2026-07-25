@@ -45,8 +45,7 @@ def parse_target_uid(raw: str) -> int | None:
 
 
 def can_manage(event: MessageEvent, config: Config) -> bool:
-    uid = get_user_id(event)
-    return event_allows(event, config.acl_perm_auth) or is_superuser(uid)
+    return event_allows(event, config.acl_perm_auth)
 
 
 def role_summary(user_id: int) -> str:

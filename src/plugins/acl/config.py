@@ -172,7 +172,7 @@ class Config(BaseModel):
     )
     acl_allow_private: BoolField = Field(
         default=False,
-        description="是否允许私聊触发业务命令（superuser 始终可）",
+        description="是否允许私聊触发业务命令",
     )
 
     # Static roles from configuration

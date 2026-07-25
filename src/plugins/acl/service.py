@@ -89,11 +89,7 @@ def is_blacklisted(user_id: int) -> bool:
     return user_id in config.acl_blacklist or acl_store.is_blacklisted(user_id)
 
 
-def scope_allows(event: MessageEvent, *, bypass_for_superuser: bool = True) -> bool:
-    user_id = get_user_id(event)
-    if bypass_for_superuser and is_superuser(user_id):
-        return True
-
+def scope_allows(event: MessageEvent) -> bool:
     if isinstance(event, PrivateMessageEvent):
         return config.acl_allow_private
 

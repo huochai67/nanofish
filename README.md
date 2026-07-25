@@ -40,8 +40,8 @@ docker/          # 容器启动脚本
 
 范围：
 
-- `ACL_ALLOWED_GROUPS`：群白名单（空=不限制）
-- `ACL_ALLOW_PRIVATE`：是否允许私聊（superuser 始终可）
+- `ACL_ALLOWED_GROUPS`：群白名单（空=不限制；对所有角色生效）
+- `ACL_ALLOW_PRIVATE`：是否允许私聊（对所有角色生效）
 - 运行时可用 `/auth group enable|disable|reset` 覆盖单群
 
 配额（superuser 不限）：

@@ -105,6 +105,8 @@ async def handle_auth(
     event: MessageEvent,
     args: Message = CommandArg(),
 ) -> None:
+    if not scope_allows(event):
+        await matcher.finish()
     parts = args.extract_plain_text().strip().split()
     sub = parts[0].lower() if parts else "whoami"
     await _dispatch_auth(matcher, event, sub, parts[1:])
