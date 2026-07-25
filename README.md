@@ -19,13 +19,15 @@ docker/          # 容器启动脚本
 | `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入） |
 | `ehsearch` | `/eh <书名>` 或回复后 `/eh` | E-Hentai 搜索，结果 HTML 截图回传（默认 admin + 配额） |
 | `imgsearch` | `/imgsearch` | 回复或附带图片反向搜索 SauceNAO；可选 Soutubot（默认 user + 配额） |
-| `genai_detect` | `/genai` | AI 生成图片检测（默认 user + 配额） |
+| `genai_detect` | `/genai` | 自动验证所有接收图片的内嵌可信 C2PA 凭证；`/genai` 使用 Sightengine 检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |
 | `media_parser` | 自动解析支持平台链接、`/bm` | 前端主题卡片预览与媒体回传（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
 | `utils` | — | 共享消息解析工具 |
 
 ### 权限（acl）
+
+`genai_detect` 仅在图片含有通过官方 C2PA 签名与 TSA 信任列表校验的内嵌凭证时自动回复；信任列表会定期刷新，但不下载远程 manifest 或 OCSP 信息。
 
 角色从低到高：`guest` < `user` < `admin` < `superuser`（`.env` 的 `SUPERUSERS`）。
 
@@ -122,7 +124,7 @@ docker compose up -d --build
 | `APP_API_BASE` | 前端 base URL |
 | `model` / `openai_api_key` / `openai_api_base` | `config.yaml` 中的 LLM 对话参数 |
 | `image_model` / `image_size` / `image_response_format` / `image_timeout` | `config.yaml` 中的 `/draw` 生图参数 |
-| `sightengine_api_user` / `sightengine_api_secret` | `config.yaml` 中的 AI 图检测凭证 |
+| `sightengine_api_user` / `sightengine_api_secret` / `c2pa_*` | `config.yaml` 中的 AI 图检测凭证和内嵌 C2PA 校验限制 |
 | `eh_ipb_*` / `eh_sk` / `eh_igneous` | `config.yaml` 中的 ExHentai cookie |
 | `imgsearch_*` | `config.yaml` 中的反向搜图上游参数 |
 | `PROXY` | 可选代理，应用于全部后端外部请求（兼容读取 `HTTP_PROXY` / `HTTPS_PROXY`） |

@@ -88,6 +88,11 @@ llm:
 genai_detect:
   sightengine_api_user: ""
   sightengine_api_secret: ""
+  # 全局 C2PA 检测的图片下载超时（秒）和单图最大字节数；仅校验内嵌凭证。
+  c2pa_timeout: 15
+  c2pa_max_file_size: 8388608
+  # 官方签名与 TSA 信任列表的刷新间隔（秒）。
+  c2pa_trust_list_refresh: 86400
 
 # ExHentai 搜索插件。填入浏览器 cookie 对应的值。
 ehsearch:
