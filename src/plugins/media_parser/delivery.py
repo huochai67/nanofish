@@ -120,12 +120,11 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
 
 async def _render_card(result: ParseResult) -> bytes:
     await result.ensure_downloads_complete(img_only=True)
-    return await app_parser_image(
-        {
-            "result": await _result_data(result),
-            "maxGridImages": _MAX_GRID_IMAGES,
-        }
-    )
+    payload = {
+        "result": await _result_data(result),
+        "maxGridImages": _MAX_GRID_IMAGES,
+    }
+    return await app_parser_image(payload)
 
 
 async def _save_image(raw: bytes) -> Path:

@@ -3,6 +3,7 @@ import atexit
 import base64
 import json
 import threading
+import uuid
 from typing import Any, ClassVar, Literal, Self
 
 from nonebot import get_driver, get_plugin_config, logger
@@ -20,6 +21,37 @@ __plugin_meta__ = PluginMetadata(
 )
 
 config: Config = get_plugin_config(Config)
+
+
+def _payload_summary(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _payload_summary(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_payload_summary(item) for item in value]
+    if isinstance(value, str) and value.startswith("data:image/"):
+        return f"{value.split(',', maxsplit=1)[0]},... ({len(value)} chars)"
+    return value
+
+
+async def _dump_frontend_payload(
+    path: str,
+    global_name: str,
+    data: dict[str, Any],
+) -> None:
+    payload = {"path": path, "global": global_name, "data": data}
+    directory = config.app_debug_payload_dir
+    await asyncio.to_thread(directory.mkdir, parents=True, exist_ok=True)
+    output = directory / f"frontend-payload-{uuid.uuid4().hex}.json"
+    await asyncio.to_thread(
+        output.write_text,
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    logger.info(f"前端截图调试参数已保存: {output}")
+    logger.info(
+        "前端截图调试参数摘要:\n"
+        f"{json.dumps(_payload_summary(payload), ensure_ascii=False, indent=2)}"
+    )
 
 
 class Client:
@@ -105,6 +137,8 @@ class Client:
         context = await self.get_context()
         page = await context.new_page()
         try:
+            if config.app_debug_frontend_payload:
+                await _dump_frontend_payload(path, global_name, data)
             if viewport_width is not None:
                 await page.set_viewport_size(
                     {
@@ -121,10 +155,13 @@ class Client:
                 wait_until="domcontentloaded",
                 timeout=config.app_page_timeout_ms,
             )
-            await page.wait_for_selector(
-                "[data-ready='true']",
+            readiness = page.locator("[data-ready='ready'], [data-ready='timeout']")
+            await readiness.wait_for(
+                state="visible",
                 timeout=config.app_page_timeout_ms,
             )
+            if await readiness.get_attribute("data-ready") == "timeout":
+                raise RuntimeError("截图页面的远程媒体在 10 秒内未完成加载")
             await page.evaluate("() => document.fonts.ready")
             # Hide Next.js dev tools / portals that may still paint in screenshots
             await page.add_style_tag(

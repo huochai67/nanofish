@@ -18,15 +18,17 @@ export function optionalSafeUrl(
   allowDataImage = false,
 ): string | null | undefined {
   const field = value[key];
-  if (field === undefined) return undefined;
-  if (typeof field !== "string" || field.length > 4_096) return null;
-  if (field === "") return undefined;
+  if (field === undefined || field === null || field === "") return undefined;
+  if (typeof field !== "string") return null;
 
+  // Parser assets are injected as local data URLs, not fetched remotely.
   if (allowDataImage && field.startsWith("data:image/")) {
     return field.length <= 2_000_000 && /^data:image\/(png|jpeg|gif|webp);base64,[a-z0-9+/=\s]+$/i.test(field)
       ? field
       : null;
   }
+
+  if (field.length > 4_096) return null;
 
   try {
     return new URL(field).protocol === "https:" ? field : null;
