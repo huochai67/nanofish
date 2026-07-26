@@ -8,7 +8,7 @@ import {
   Bookmark,
   CircleUserRound,
   Clapperboard,
-  Coins,
+  CirclePoundSterling,
   Ellipsis,
   Eye,
   FileText,
@@ -16,7 +16,7 @@ import {
   Link as LinkIcon,
   MessageCircle,
   MessageCircleMore,
-  MessageSquareQuote,
+  MessageSquareText,
   Play,
   Send,
   Share2,
@@ -516,12 +516,12 @@ function ParserCard({
 function StatsRow({ stats, dark }: { stats: ParserStats; dark: boolean }) {
   const items = [
     { Icon: Eye, value: stats.view },
-    { Icon: MessageSquareQuote, value: stats.danmaku },
+    { Icon: MessageSquareText, value: stats.danmaku },
     { Icon: ThumbsUp, value: stats.like },
     { Icon: MessageCircle, value: stats.comment ?? stats.reply },
     { Icon: Star, value: stats.favorite },
     { Icon: Bookmark, value: stats.collect },
-    { Icon: Coins, value: stats.coin },
+    { Icon: CirclePoundSterling, value: stats.coin },
     { Icon: Share2, value: stats.share },
   ].filter((item) => item.value);
   if (!items.length) return null;
@@ -612,8 +612,8 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
               <p className="line-clamp-2 text-sm leading-5 text-[#18191c]">{result.title ?? body}</p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#9499a0]">
                 <span className="flex items-center gap-1"><Play size={13} />{formatCount(result.stats?.view)}</span>
-                <span className="flex items-center gap-1"><MessageCircle size={13} />{formatCount(result.stats?.danmaku)}</span>
-                <span className="flex items-center gap-1"><Coins size={13} />{formatCount(result.stats?.coin)}</span>
+                <span className="flex items-center gap-1"><MessageSquareText size={13} />{formatCount(result.stats?.danmaku)}</span>
+                <span className="flex items-center gap-1"><CirclePoundSterling size={13} />{formatCount(result.stats?.coin)}</span>
                 <span className="flex items-center gap-1"><Star size={13} />{formatCount(result.stats?.favorite)}</span>
               </div>
             </div>
