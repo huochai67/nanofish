@@ -3,18 +3,20 @@
 
 import { useEffect, useState, type CSSProperties } from "react";
 import {
+  ArrowUpRight,
   AudioLines,
-  AlertCircle,
-  ChevronRight,
+  Bookmark,
   CircleUserRound,
   Clapperboard,
   Coins,
   Ellipsis,
+  Eye,
   FileText,
   Heart,
   Link as LinkIcon,
   MessageCircle,
   MessageCircleMore,
+  MessageSquareQuote,
   Play,
   Send,
   Share2,
@@ -27,9 +29,11 @@ import {
   parseParserScreenshotData,
   type ParserResult,
   type ParserScreenshotData,
+  type ParserStats,
 } from "./types";
 import { parseUrlData } from "../utils/url-data";
 import { useAssetReadiness } from "../utils/use-asset-readiness";
+import { Content, Notice, PageShell } from "../components/chrome";
 
 declare global {
   interface Window {
@@ -285,30 +289,25 @@ export default function ParserPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [beginAssetTracking]);
 
-  if (!data) return <div className="min-h-screen" data-ready="false" />;
+  if (!data) return <div className="min-h-screen bg-paper" data-ready="false" />;
 
   const theme = THEMES[data.result.platform.name] ?? DEFAULT_THEME;
   return (
-    <main
-      className="min-h-screen px-4 py-5 text-slate-900"
-      data-ready={status}
+    <PageShell
+      ready={status}
       style={{ background: theme.background }}
+      className="text-slate-900"
     >
-      <section className="mx-auto max-w-[760px]">
-        {error ? (
-          <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <p>{error}</p>
-          </div>
-        ) : null}
+      <Content className="space-y-4 py-4 sm:py-6">
+        {error ? <Notice>{error}</Notice> : null}
         <ParserCard
           result={data.result}
           theme={theme}
           maxGridImages={data.maxGridImages ?? 9}
           onAsset={completeAsset}
         />
-      </section>
-    </main>
+      </Content>
+    </PageShell>
   );
 }
 
@@ -345,18 +344,18 @@ function ParserCard({
     (content): content is Extract<typeof content, { kind: "audio" }> => content.kind === "audio",
   );
   const Icon = theme.Icon;
-  const style = { backgroundColor: result.platform.name === "nga" ? "#fffdf8" : theme.card } as CSSProperties;
+  const style = { backgroundColor: theme.card } as CSSProperties;
 
   return (
     <article
       data-parser-card
-      className={`overflow-hidden rounded-[22px] border shadow-[0_18px_48px_rgba(15,23,42,0.14)] ${
-        dark ? "border-white/10" : "border-white/80"
-      } ${repost ? "shadow-none" : ""}`}
+      className={`overflow-hidden rounded-2xl border ${
+        dark ? "border-white/10" : "border-black/[0.06]"
+      } ${repost ? "shadow-none" : "shadow-pop"}`}
       style={style}
     >
-        <div className={`flex items-center justify-between border-b px-5 py-3 ${dark ? "border-white/10" : "border-slate-100"}`}>
-        <div className="flex items-center gap-2">
+      <div className={`flex items-center justify-between gap-2 border-b px-4 py-3 sm:px-5 ${dark ? "border-white/10" : "border-black/[0.05]"}`}>
+        <div className="flex min-w-0 items-center gap-2">
           {theme.logo ? (
             <img
               src={theme.logo}
@@ -366,36 +365,44 @@ function ParserCard({
               onError={onAsset}
             />
           ) : (
-            <Icon size={18} strokeWidth={2.5} style={{ color: theme.accent }} />
+            <>
+              <Icon size={17} strokeWidth={2.5} style={{ color: theme.accent }} />
+              <span className={`text-xs font-bold tracking-wide ${text}`}>{theme.label}</span>
+            </>
           )}
-          {!theme.logo ? <span className={`text-xs font-bold tracking-wide ${text}`}>{theme.label}</span> : null}
           {result.contentType ? (
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${muted}`} style={{ backgroundColor: theme.accentSoft }}>
+            <span
+              className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{
+                backgroundColor: theme.accentSoft,
+                color: dark ? "#e2e8f0" : theme.accent,
+              }}
+            >
               {result.contentType}
             </span>
           ) : null}
         </div>
-        <ChevronRight size={17} className={muted} />
+        <ArrowUpRight size={15} className={`shrink-0 ${muted}`} />
       </div>
 
-      <div className="space-y-4 px-5 py-5">
+      <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
         {result.author ? (
           <div className="flex items-center gap-3">
             {result.author.avatar ? (
               <img
                 src={result.author.avatar}
                 alt=""
-                className="h-11 w-11 rounded-full border border-white object-cover shadow-sm"
+                className="h-10 w-10 rounded-full object-cover ring-1 ring-black/[0.06]"
                 referrerPolicy="no-referrer"
                 onLoad={onAsset}
                 onError={onAsset}
               />
             ) : (
               <span
-                className="flex h-11 w-11 items-center justify-center rounded-full text-white"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-white"
                 style={{ backgroundColor: theme.accent }}
               >
-                <CircleUserRound size={23} />
+                <CircleUserRound size={21} />
               </span>
             )}
             <div className="min-w-0">
@@ -405,14 +412,14 @@ function ParserCard({
           </div>
         ) : null}
 
-        {result.title ? <h1 className={`text-[21px] font-bold leading-snug ${text}`}>{result.title}</h1> : null}
+        {result.title ? <h1 className={`text-lg font-bold leading-snug sm:text-xl ${text}`}>{result.title}</h1> : null}
         {result.text ? <p className={`whitespace-pre-wrap text-[15px] leading-7 ${text}`}>{result.text}</p> : null}
 
         {video?.kind === "video" ? <VideoView media={video} onAsset={onAsset} /> : null}
         {!video && images.length ? <MediaGrid images={images} maxItems={maxGridImages} onAsset={onAsset} /> : null}
 
         {result.graphics.length && !video && !images.length ? (
-          <div className={`space-y-3 rounded-2xl p-3 ${dark ? "bg-white/5" : "bg-slate-50"}`}>
+          <div className={`space-y-3 rounded-xl p-3 ${dark ? "bg-white/5" : "bg-slate-50"}`}>
             {result.graphics.map((graphic, index) =>
               graphic.kind === "text" ? (
                 <p key={index} className={`whitespace-pre-wrap text-sm leading-6 ${text}`}>{graphic.text}</p>
@@ -421,7 +428,7 @@ function ParserCard({
                   key={index}
                   src={graphic.src}
                   alt={graphic.alt ?? "解析图片"}
-                  className="max-h-[560px] w-full rounded-xl object-contain"
+                  className="max-h-[560px] w-full rounded-lg object-contain"
                   referrerPolicy="no-referrer"
                   onLoad={onAsset}
                   onError={onAsset}
@@ -432,7 +439,7 @@ function ParserCard({
         ) : null}
 
         {audio.map((media, index) => (
-          <div key={index} className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm ${dark ? "bg-white/10 text-slate-200" : "bg-slate-50 text-slate-600"}`}>
+          <div key={index} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${dark ? "bg-white/10 text-slate-200" : "bg-slate-50 text-slate-600"}`}>
             {media.cover ? (
               <img
                 src={media.cover}
@@ -449,26 +456,57 @@ function ParserCard({
         ))}
 
         {result.extraInfo ? (
-          <div className={`rounded-xl border-l-4 px-3.5 py-3 text-sm leading-6 ${dark ? "bg-white/5 text-slate-300" : "bg-slate-50 text-slate-600"}`} style={{ borderLeftColor: theme.accent }}>
+          <div className={`rounded-lg border-l-[3px] px-3.5 py-2.5 text-sm leading-6 ${dark ? "bg-white/5 text-slate-300" : "bg-slate-50 text-slate-600"}`} style={{ borderLeftColor: theme.accent }}>
             {result.extraInfo}
           </div>
         ) : null}
 
         {result.repost ? (
-          <div className={`rounded-2xl p-2 ${dark ? "bg-white/5" : "bg-slate-50"}`}>
+          <div className={`rounded-xl p-2 ${dark ? "bg-white/5" : "bg-slate-50"}`}>
             <div className={`mb-2 flex items-center gap-1.5 px-1.5 text-xs ${muted}`}><Share2 size={13} /> 转发内容</div>
             <ParserCard result={result.repost} theme={THEMES[result.repost.platform.name] ?? theme} maxGridImages={maxGridImages} onAsset={onAsset} repost />
           </div>
         ) : null}
 
+        {result.stats ? <StatsRow stats={result.stats} dark={dark} /> : null}
+
         {result.url ? (
-          <div className={`flex min-w-0 items-center gap-2 pt-1 text-xs ${muted}`}>
-            <LinkIcon size={14} className="shrink-0" style={{ color: theme.accent }} />
+          <div className={`flex min-w-0 items-center gap-1.5 text-xs ${muted}`}>
+            <LinkIcon size={13} className="shrink-0" style={{ color: theme.accent }} />
             <span className="truncate">{result.url}</span>
           </div>
         ) : null}
       </div>
     </article>
+  );
+}
+
+function StatsRow({ stats, dark }: { stats: ParserStats; dark: boolean }) {
+  const items = [
+    { Icon: Eye, value: stats.view },
+    { Icon: MessageSquareQuote, value: stats.danmaku },
+    { Icon: ThumbsUp, value: stats.like },
+    { Icon: MessageCircle, value: stats.comment ?? stats.reply },
+    { Icon: Star, value: stats.favorite },
+    { Icon: Bookmark, value: stats.collect },
+    { Icon: Coins, value: stats.coin },
+    { Icon: Share2, value: stats.share },
+  ].filter((item) => item.value);
+  if (!items.length) return null;
+
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t pt-3 text-xs ${
+        dark ? "border-white/10 text-slate-400" : "border-black/[0.05] text-slate-500"
+      }`}
+    >
+      {items.map(({ Icon, value }, index) => (
+        <span key={index} className="inline-flex items-center gap-1.5">
+          <Icon size={14} />
+          {formatCount(value)}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -483,7 +521,7 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
   const body = result.text ?? result.title;
 
   return (
-    <article data-parser-card className="flex gap-3 overflow-hidden rounded-[18px] bg-white px-5 py-4 shadow-[0_14px_42px_rgba(15,23,42,0.1)]">
+    <article data-parser-card className="flex gap-3 rounded-2xl border border-black/[0.06] bg-white px-4 py-4 shadow-pop sm:px-5">
       <aside className="shrink-0">
         <div className="relative h-11 w-11">
           {result.author?.avatar ? (
@@ -518,45 +556,45 @@ function BilibiliCard({ result, onAsset }: { result: ParserResult; onAsset: () =
       </aside>
       <div className="min-w-0 flex-1">
         <header className="flex items-start">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold text-[#fb7299]">{result.author?.name ?? "哔哩哔哩用户"}</p>
-          <p className="mt-0.5 text-xs text-[#99a2aa]">
-            {formatTime(result.timestamp) ?? result.author?.description ?? "刚刚"}
-            {video ? " · 投稿了视频" : ""}
-          </p>
-        </div>
-        <Ellipsis size={20} className="mt-1 text-[#99a2aa]" />
-      </header>
-
-      {body ? <p className="mt-3 whitespace-pre-wrap text-[15px] leading-6 text-[#18191c]">{body}</p> : null}
-
-      {video ? (
-        <div className="mt-3 flex overflow-hidden rounded-md border border-[#e3e5e7] bg-[#f6f7f8]">
-          <div className="relative h-32 w-[38%] shrink-0 bg-[#2b2d31]">
-            {video.poster ? (
-              <img src={video.poster} alt={result.title ?? "视频封面"} className="h-full w-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} />
-            ) : null}
-            <span className="absolute bottom-2 right-2 rounded bg-black/65 px-1.5 py-0.5 text-xs text-white">{formatDuration(video.duration) ?? "视频"}</span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[15px] font-semibold text-[#fb7299]">{result.author?.name ?? "哔哩哔哩用户"}</p>
+            <p className="mt-0.5 text-xs text-[#99a2aa]">
+              {formatTime(result.timestamp) ?? result.author?.description ?? "刚刚"}
+              {video ? " · 投稿了视频" : ""}
+            </p>
           </div>
-          <div className="flex min-w-0 flex-1 flex-col justify-between p-3">
-            <p className="line-clamp-2 text-sm leading-5 text-[#18191c]">{result.title ?? body}</p>
-            <div className="flex items-center gap-4 text-xs text-[#9499a0]">
-              <span className="flex items-center gap-1"><Play size={13} />{formatCount(result.stats?.view)}</span>
-              <span className="flex items-center gap-1"><MessageCircle size={13} />{formatCount(result.stats?.danmaku)}</span>
-              <span className="flex items-center gap-1"><Coins size={13} />{formatCount(result.stats?.coin)}</span>
-              <span className="flex items-center gap-1"><Star size={13} />{formatCount(result.stats?.favorite)}</span>
+          <Ellipsis size={20} className="mt-1 shrink-0 text-[#99a2aa]" />
+        </header>
+
+        {body ? <p className="mt-2.5 whitespace-pre-wrap text-[15px] leading-6 text-[#18191c]">{body}</p> : null}
+
+        {video ? (
+          <div className="mt-3 flex overflow-hidden rounded-xl border border-[#e3e5e7] bg-[#f6f7f8]">
+            <div className="relative h-32 w-[38%] shrink-0 bg-[#2b2d31]">
+              {video.poster ? (
+                <img src={video.poster} alt={result.title ?? "视频封面"} className="h-full w-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} />
+              ) : null}
+              <span className="absolute bottom-2 right-2 rounded bg-black/65 px-1.5 py-0.5 text-xs text-white">{formatDuration(video.duration) ?? "视频"}</span>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col justify-between p-3">
+              <p className="line-clamp-2 text-sm leading-5 text-[#18191c]">{result.title ?? body}</p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#9499a0]">
+                <span className="flex items-center gap-1"><Play size={13} />{formatCount(result.stats?.view)}</span>
+                <span className="flex items-center gap-1"><MessageCircle size={13} />{formatCount(result.stats?.danmaku)}</span>
+                <span className="flex items-center gap-1"><Coins size={13} />{formatCount(result.stats?.coin)}</span>
+                <span className="flex items-center gap-1"><Star size={13} />{formatCount(result.stats?.favorite)}</span>
+              </div>
             </div>
           </div>
-        </div>
-      ) : images.length ? (
-        <div className="mt-3"><MediaGrid images={images} maxItems={9} onAsset={onAsset} /></div>
-      ) : null}
+        ) : images.length ? (
+          <div className="mt-3"><MediaGrid images={images} maxItems={9} onAsset={onAsset} /></div>
+        ) : null}
 
-      <footer className="mt-4 grid grid-cols-3 border-t border-[#f1f2f3] pt-3 text-[#7d8590]">
-        <span className="flex items-center justify-center gap-1.5 text-sm"><Share2 size={17} />{formatCount(result.stats?.share)}</span>
-        <span className="flex items-center justify-center gap-1.5 text-sm"><MessageCircle size={17} />{formatCount(result.stats?.reply)}</span>
-        <span className="flex items-center justify-center gap-1.5 text-sm"><ThumbsUp size={17} />{formatCount(result.stats?.like)}</span>
-      </footer>
+        <footer className="mt-4 grid grid-cols-3 border-t border-[#f1f2f3] pt-3 text-[#7d8590]">
+          <span className="flex items-center justify-center gap-1.5 text-sm"><Share2 size={17} />{formatCount(result.stats?.share)}</span>
+          <span className="flex items-center justify-center gap-1.5 text-sm"><MessageCircle size={17} />{formatCount(result.stats?.reply)}</span>
+          <span className="flex items-center justify-center gap-1.5 text-sm"><ThumbsUp size={17} />{formatCount(result.stats?.like)}</span>
+        </footer>
       </div>
     </article>
   );
@@ -573,8 +611,8 @@ function XiaohongshuCard({ result, onAsset }: { result: ParserResult; onAsset: (
   const media = video?.poster ?? image?.src;
 
   return (
-    <article data-parser-card className="overflow-hidden rounded-[18px] bg-white shadow-[0_14px_42px_rgba(15,23,42,0.12)] sm:flex">
-      <section className="relative flex aspect-[4/5] items-center justify-center bg-[#202124] sm:aspect-auto sm:min-h-[620px] sm:w-[54%]">
+    <article data-parser-card className="overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-pop sm:flex">
+      <section className="relative flex aspect-[4/5] items-center justify-center bg-[#202124] sm:aspect-auto sm:min-h-[600px] sm:w-[52%]">
         {media ? <img src={media} alt={result.title ?? "解析媒体"} className="h-full w-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <div className="h-full w-full bg-gradient-to-br from-[#434343] to-[#111]" />}
         {video ? (
           <span className="absolute inset-0 flex items-center justify-center">
@@ -584,7 +622,7 @@ function XiaohongshuCard({ result, onAsset }: { result: ParserResult; onAsset: (
         {video?.duration !== undefined ? <span className="absolute bottom-4 right-4 rounded bg-black/60 px-2 py-1 text-xs text-white">{formatDuration(video.duration)}</span> : null}
       </section>
 
-      <section className="flex flex-1 flex-col px-5 py-5 sm:min-h-[620px]">
+      <section className="flex flex-1 flex-col px-4 py-4 sm:min-h-[600px] sm:px-5 sm:py-5">
         <header className="flex items-center gap-2.5">
           {result.author?.avatar ? (
             <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} />
@@ -598,22 +636,22 @@ function XiaohongshuCard({ result, onAsset }: { result: ParserResult; onAsset: (
             />
           )}
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#333]">{result.author?.name ?? "小红书用户"}</span>
-          <span className="rounded-full bg-[#ff2442] px-5 py-2 text-sm font-medium text-white">关注</span>
+          <span className="shrink-0 rounded-full bg-[#ff2442] px-4 py-1.5 text-xs font-medium text-white sm:px-5 sm:py-2 sm:text-sm">关注</span>
         </header>
 
-        {result.title ? <h1 className="mt-7 text-lg font-bold leading-7 text-[#222]">{result.title}</h1> : null}
+        {result.title ? <h1 className="mt-5 text-lg font-bold leading-7 text-[#222] sm:mt-7">{result.title}</h1> : null}
         {result.text ? <p className="mt-2 whitespace-pre-wrap text-[15px] leading-6 text-[#333]"><XiaohongshuText text={result.text} /></p> : null}
         {result.contentType ? <span className="mt-3 w-fit rounded-md border border-[#efefef] px-2 py-1 text-xs text-[#666]">{result.contentType}</span> : null}
         <p className="mt-3 text-xs text-[#999]">{formatTime(result.timestamp) ?? result.author?.description ?? "刚刚"}</p>
 
         {result.extraInfo ? <p className="mt-5 border-t border-[#f0f0f0] pt-4 text-sm leading-6 text-[#666]">{result.extraInfo}</p> : null}
 
-        <footer className="mt-auto flex items-center justify-between border-t border-[#f0f0f0] pt-4 text-[#555]">
-          <span className="rounded-full bg-[#f7f7f7] px-3 py-2 text-xs text-[#999]">说点什么...</span>
-          <span className="flex items-center gap-1 text-sm"><Heart size={19} />{formatCount(result.stats?.like)}</span>
-          <span className="flex items-center gap-1 text-sm"><Star size={19} />{formatCount(result.stats?.collect)}</span>
-          <span className="flex items-center gap-1 text-sm"><MessageCircle size={19} />{formatCount(result.stats?.comment)}</span>
-          <Send size={19} />
+        <footer className="mt-auto flex items-center justify-between gap-2 border-t border-[#f0f0f0] pt-3.5 text-[#555]">
+          <span className="min-w-0 truncate rounded-full bg-[#f7f7f7] px-3 py-2 text-xs text-[#999]">说点什么...</span>
+          <span className="flex shrink-0 items-center gap-1 text-sm"><Heart size={18} />{formatCount(result.stats?.like)}</span>
+          <span className="flex shrink-0 items-center gap-1 text-sm"><Star size={18} />{formatCount(result.stats?.collect)}</span>
+          <span className="flex shrink-0 items-center gap-1 text-sm"><MessageCircle size={18} />{formatCount(result.stats?.comment)}</span>
+          <Send size={18} className="shrink-0" />
         </footer>
       </section>
     </article>
@@ -622,10 +660,10 @@ function XiaohongshuCard({ result, onAsset }: { result: ParserResult; onAsset: (
 
 function VideoView({ media, onAsset }: { media: Extract<ParserResult["contents"][number], { kind: "video" }>; onAsset: () => void }) {
   return (
-    <div className="relative aspect-video overflow-hidden rounded-2xl bg-slate-900">
+    <div className="relative aspect-video overflow-hidden rounded-xl bg-slate-900">
       {media.poster ? <img src={media.poster} alt="视频封面" className="h-full w-full object-cover opacity-90" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <div className="h-full w-full bg-gradient-to-br from-slate-700 to-slate-950" />}
-      <span className="absolute inset-0 flex items-center justify-center"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/85 pl-0.5 text-slate-900 shadow-xl"><Play size={26} fill="currentColor" /></span></span>
-      {formatDuration(media.duration) ? <span className="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-xs font-medium text-white">{formatDuration(media.duration)}</span> : null}
+      <span className="absolute inset-0 flex items-center justify-center"><span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 pl-0.5 text-slate-900 shadow-xl"><Play size={26} fill="currentColor" /></span></span>
+      {formatDuration(media.duration) ? <span className="absolute bottom-3 right-3 rounded-md bg-black/70 px-2 py-1 text-[11px] font-medium text-white">{formatDuration(media.duration)}</span> : null}
     </div>
   );
 }
@@ -636,7 +674,7 @@ function MediaGrid({ images, maxItems, onAsset }: { images: Extract<ParserResult
   return (
     <div className={`grid gap-1.5 ${columns}`}>
       {shown.map((image, index) => (
-        <div key={index} className={`relative overflow-hidden rounded-xl bg-slate-100 ${shown.length === 1 ? "max-h-[620px]" : "aspect-square"}`}>
+        <div key={index} className={`relative overflow-hidden rounded-xl bg-slate-100 ${shown.length === 1 ? "max-h-[560px]" : "aspect-square"}`}>
           <img src={image.src} alt={image.alt ?? "解析图片"} className="h-full w-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} />
           {index === shown.length - 1 && images.length > maxItems ? <span className="absolute inset-0 flex items-center justify-center bg-black/55 text-xl font-bold text-white">+{images.length - maxItems}</span> : null}
         </div>

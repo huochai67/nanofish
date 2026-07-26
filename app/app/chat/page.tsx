@@ -11,7 +11,6 @@ import {
   Share2,
   FileText,
   ImageOff,
-  AlertCircle,
   Check,
 } from "lucide-react";
 import {
@@ -24,6 +23,7 @@ import {
 } from "./types";
 import { parseUrlData, encodeUrlData } from "../utils/url-data";
 import { useAssetReadiness } from "../utils/use-asset-readiness";
+import { Content, Notice, PageHeader, PageShell } from "../components/chrome";
 
 declare global {
   interface Window {
@@ -92,56 +92,40 @@ export default function ChatPage() {
   };
 
   if (!chatData) {
-    return <div className="min-h-screen bg-zinc-50" data-ready="false" />;
+    return <div className="min-h-screen bg-paper" data-ready="false" />;
   }
 
   const title = chatData.title?.trim() || "对话";
-  const msgCount = chatData.messages.length;
 
   return (
-    <div
-      className="min-h-screen bg-zinc-50 text-zinc-900"
-      data-ready={status}
-    >
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-5 py-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-600/20">
-              <MessageSquare size={18} />
-            </div>
-            <div className="min-w-0">
-              <h1 className="truncate text-base font-semibold tracking-tight">
-                {title}
-              </h1>
-              <p className="text-xs text-zinc-500">{msgCount} 条消息</p>
-            </div>
-          </div>
+    <PageShell ready={status}>
+      <PageHeader
+        icon={<MessageSquare size={18} />}
+        accent="bg-indigo-600 shadow-indigo-600/25"
+        title={title}
+        subtitle={`${chatData.messages.length} 条消息`}
+        action={
           <button
             type="button"
             onClick={copyShareUrl}
             aria-label="复制带数据的分享链接"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900"
             title="复制带数据的分享链接"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-2.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-50 hover:text-zinc-900"
           >
             {copied ? <Check size={14} className="text-emerald-600" /> : <Share2 size={14} />}
             {copied ? "已复制" : "分享"}
           </button>
-        </div>
-      </header>
+        }
+      />
 
-      <main className="mx-auto max-w-2xl space-y-4 px-4 py-6 pb-16">
-        {error ? (
-          <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <p>{error}</p>
-          </div>
-        ) : null}
+      <Content className="space-y-4 py-5 pb-14">
+        {error ? <Notice>{error}</Notice> : null}
 
         {chatData.messages.map((msg, idx) => (
           <MessageRow key={idx} message={msg} index={idx} onAsset={completeAsset} />
         ))}
-      </main>
-    </div>
+      </Content>
+    </PageShell>
   );
 }
 
@@ -152,13 +136,13 @@ const ROLE_META: Record<
   assistant: {
     label: "助手",
     Icon: Bot,
-    avatar: "bg-violet-600 text-white",
+    avatar: "border border-black/[0.06] bg-white text-indigo-600 shadow-sm",
     side: "left",
   },
   user: {
     label: "用户",
     Icon: User,
-    avatar: "bg-indigo-600 text-white",
+    avatar: "bg-indigo-600 text-white shadow-sm shadow-indigo-600/25",
     side: "right",
   },
 };
@@ -183,14 +167,14 @@ function MessageRow({
       data-role={message.role}
     >
       <div
-        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full shadow-sm ${meta.avatar}`}
+        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full sm:h-9 sm:w-9 ${meta.avatar}`}
         aria-hidden
       >
-        <Icon size={16} strokeWidth={2.25} />
+        <Icon size={15} strokeWidth={2.25} />
       </div>
 
       <div
-        className={`flex min-w-0 max-w-[min(100%,28rem)] flex-col gap-1 ${
+        className={`flex min-w-0 max-w-[85%] flex-col gap-1 sm:max-w-[78%] ${
           isUser ? "items-end" : "items-start"
         }`}
       >
@@ -199,10 +183,10 @@ function MessageRow({
         </span>
 
         <div
-          className={`w-full overflow-hidden rounded-2xl px-3.5 py-2.5 shadow-sm ring-1 ${
+          className={`w-full overflow-hidden rounded-2xl px-3.5 py-2.5 ${
             isUser
-              ? "rounded-tr-md bg-indigo-600 text-white ring-indigo-500/30"
-              : "rounded-tl-md bg-white text-zinc-800 ring-zinc-200"
+              ? "rounded-tr-md bg-indigo-600 text-white shadow-sm shadow-indigo-600/25"
+              : "rounded-tl-md border border-black/[0.05] bg-white text-zinc-800 shadow-sm"
           }`}
         >
           <div className="flex flex-col gap-2.5">
@@ -238,9 +222,7 @@ function SegmentView({
   if (segment.type === "image_url") {
     const url = segment.image_url?.url;
     if (!url) return null;
-    return (
-      <ImageSegment url={url} onAsset={onAsset} />
-    );
+    return <ImageSegment url={url} isUser={isUser} onAsset={onAsset} />;
   }
 
   if (segment.type === "file") {
@@ -248,10 +230,10 @@ function SegmentView({
     const ext = name.includes(".") ? name.split(".").pop()?.toUpperCase() : "";
     return (
       <div
-        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ring-1 ${
+        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 ring-1 ring-inset ${
           isUser
             ? "bg-white/10 ring-white/20"
-            : "bg-zinc-50 ring-zinc-200"
+            : "bg-zinc-50 ring-black/[0.06]"
         }`}
       >
         <div
@@ -284,20 +266,36 @@ function SegmentView({
   return null;
 }
 
-function ImageSegment({ url, onAsset }: { url: string; onAsset: () => void }) {
+function ImageSegment({
+  url,
+  isUser,
+  onAsset,
+}: {
+  url: string;
+  isUser: boolean;
+  onAsset: () => void;
+}) {
   const [failed, setFailed] = useState(false);
 
   if (failed) {
     return (
-      <div className="flex h-28 items-center justify-center gap-2 rounded-xl bg-zinc-100 px-4 text-sm text-zinc-500">
-        <ImageOff size={18} />
+      <div
+        className={`flex h-24 items-center justify-center gap-2 rounded-xl px-4 text-sm ${
+          isUser ? "bg-white/10 text-indigo-100" : "bg-zinc-100 text-zinc-500"
+        }`}
+      >
+        <ImageOff size={17} />
         图片不可预览
       </div>
     );
   }
 
   return (
-    <figure className="overflow-hidden rounded-xl">
+    <figure
+      className={`w-fit overflow-hidden rounded-xl ring-1 ring-inset ${
+        isUser ? "ring-white/20" : "ring-black/[0.06]"
+      }`}
+    >
       <img
         src={url}
         alt="对话中的图片"

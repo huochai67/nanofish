@@ -200,7 +200,7 @@ class Client:
             "__PARSER_DATA__",
             parser_data,
             image_type="png",
-            viewport_width=800,
+            viewport_width=720,
             target_selector="[data-parser-card]",
         )
 

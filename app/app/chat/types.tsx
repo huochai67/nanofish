@@ -89,7 +89,7 @@ export const MockChatData: ChatData = {
         {
           type: "image_url",
           image_url: {
-            url: "https://heroui-assets.nyc3.cdn.digitaloceanspaces.com/docs/cherries.jpeg",
+            url: "https://picsum.photos/seed/nanofish/640/420",
           },
         },
         { type: "text", text: "这是什么？" },

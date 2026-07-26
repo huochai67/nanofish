@@ -3,16 +3,19 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import {
-  MessageSquare,
-  BookOpen,
-  ExternalLink,
-  Code2,
   ArrowRight,
-  FlaskConical,
-  Search,
+  BookOpen,
+  Braces,
+  ChevronRight,
   Clapperboard,
+  Database,
+  ExternalLink,
+  Fish,
+  Link2,
+  MessageSquare,
+  Search,
 } from "lucide-react";
-import { Card } from "@heroui/react";
+import { Card, Content, PageHeader, PageShell } from "./components/chrome";
 import { encodeUrlData } from "./utils/url-data";
 import { MockChatData } from "./chat/types";
 import { MockEhData } from "./eh/types";
@@ -25,11 +28,12 @@ type PageEntry = {
   description: string;
   injectKey: string;
   icon: ReactNode;
+  /** Solid accent chip classes. */
   accent: string;
-  iconBg: string;
+  /** Soft tint classes for the route chip. */
+  chipSoft: string;
   mockSummary: string;
   mockPreview: unknown;
-  supportsDataQuery?: boolean;
 };
 
 const PAGES: PageEntry[] = [
@@ -39,12 +43,11 @@ const PAGES: PageEntry[] = [
     description:
       "多模态对话截图页。支持文本 / 图片 / 文件消息，供 /llm 等结果回传。",
     injectKey: "__CHAT_DATA__",
-    icon: <MessageSquare size={22} />,
-    accent: "from-indigo-500 to-violet-600",
-    iconBg: "bg-indigo-600",
+    icon: <MessageSquare size={20} />,
+    accent: "bg-indigo-600 shadow-indigo-600/25",
+    chipSoft: "bg-indigo-50 text-indigo-700",
     mockSummary: `${MockChatData.messages.length} 条消息 · title: ${MockChatData.title ?? "(无)"}`,
     mockPreview: MockChatData,
-    supportsDataQuery: true,
   },
   {
     href: "/eh",
@@ -52,12 +55,11 @@ const PAGES: PageEntry[] = [
     description:
       "E-Hentai 搜索结果卡片页（封面、标签、二维码），供 /eh 截图回传。",
     injectKey: "__EH_DATA__",
-    icon: <BookOpen size={22} />,
-    accent: "from-rose-500 to-pink-600",
-    iconBg: "bg-rose-600",
+    icon: <BookOpen size={20} />,
+    accent: "bg-rose-600 shadow-rose-600/25",
+    chipSoft: "bg-rose-50 text-rose-700",
     mockSummary: `query: 「${MockEhData.query}」· ${MockEhData.results.length} 条结果`,
     mockPreview: MockEhData,
-    supportsDataQuery: true,
   },
   {
     href: "/imgsearch",
@@ -65,12 +67,11 @@ const PAGES: PageEntry[] = [
     description:
       "SauceNAO 与 Soutubot 的反向图片搜索结果页，供 /imgsearch 截图回传。",
     injectKey: "__IMGSEARCH_DATA__",
-    icon: <Search size={22} />,
-    accent: "from-cyan-500 to-teal-600",
-    iconBg: "bg-cyan-700",
+    icon: <Search size={20} />,
+    accent: "bg-teal-600 shadow-teal-600/25",
+    chipSoft: "bg-teal-50 text-teal-700",
     mockSummary: `${MockImageSearchData.results.length} 条匹配结果`,
     mockPreview: MockImageSearchData,
-    supportsDataQuery: true,
   },
   {
     href: "/parser",
@@ -78,141 +79,167 @@ const PAGES: PageEntry[] = [
     description:
       "多平台链接解析截图页，展示来源、作者、正文与媒体内容。",
     injectKey: "__PARSER_DATA__",
-    icon: <Clapperboard size={22} />,
-    accent: "from-sky-500 to-blue-600",
-    iconBg: "bg-sky-600",
+    icon: <Clapperboard size={20} />,
+    accent: "bg-sky-600 shadow-sky-600/25",
+    chipSoft: "bg-sky-50 text-sky-700",
     mockSummary: `${MockParserData.result.platform.displayName} · ${MockParserData.result.contentType ?? "动态"}`,
     mockPreview: MockParserData,
-    supportsDataQuery: true,
   },
 ];
 
-const primaryBtnClass =
-  "inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800";
-const secondaryBtnClass =
-  "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50";
+const GUIDE: { icon: ReactNode; lead: string; body: ReactNode }[] = [
+  {
+    icon: <Braces size={13} />,
+    lead: "Playwright 注入",
+    body: (
+      <>
+        导航前写入{" "}
+        <code className="rounded bg-zinc-100 px-1 py-px font-mono text-[11px] text-zinc-700">
+          window.__CHAT_DATA__
+        </code>{" "}
+        等全局变量，键名见各卡片 inject 标注
+      </>
+    ),
+  },
+  {
+    icon: <Link2 size={13} />,
+    lead: "URL 参数",
+    body: (
+      <>
+        各页接受{" "}
+        <code className="rounded bg-zinc-100 px-1 py-px font-mono text-[11px] text-zinc-700">
+          ?data=&lt;base64(json)&gt;
+        </code>
+        ，仅适合本地短数据预览
+      </>
+    ),
+  },
+  {
+    icon: <Database size={13} />,
+    lead: "Mock 回退",
+    body: "无注入或数据非法时自动使用内置 Mock 数据，并在页面顶部提示",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900">
-      <header className="border-b border-zinc-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-6 py-5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-zinc-900 text-white">
-            <FlaskConical size={22} />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">
-              nanofish 前端预览
-            </h1>
-            <p className="text-sm text-zinc-500">
-              进入各截图界面，使用内置 mock 参数本地调试
-            </p>
-          </div>
-        </div>
-      </header>
+    <PageShell ready="ready">
+      <PageHeader
+        icon={<Fish size={20} />}
+        accent="bg-zinc-900 shadow-zinc-900/25"
+        title="nanofish 预览台"
+        subtitle="截图界面索引 · 数据注入调试"
+        action={
+          <span className="hidden rounded-md bg-zinc-100 px-2 py-1 font-mono text-[11px] text-zinc-500 sm:inline-block">
+            720 × auto
+          </span>
+        }
+      />
 
-      <main className="mx-auto max-w-4xl space-y-6 p-6 pb-16">
-        <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-              <Code2 size={18} />
+      <Content className="space-y-4 py-5 pb-14">
+        <Card className="space-y-2.5 p-4">
+          {GUIDE.map((row) => (
+            <div key={row.lead} className="flex items-start gap-2.5">
+              <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500">
+                {row.icon}
+              </span>
+              <p className="text-[13px] leading-6 text-zinc-600">
+                <span className="font-medium text-zinc-900">{row.lead}</span>
+                <span className="text-zinc-400"> · </span>
+                {row.body}
+              </p>
             </div>
-            <div className="space-y-1 text-sm text-zinc-600">
-              <p className="font-medium text-zinc-900">数据注入方式</p>
-              <ul className="list-disc space-y-1 pl-4">
-                <li>
-                  Playwright：打开页面前注入{" "}
-                  <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs">
-                    window.__CHAT_DATA__
-                  </code>{" "}
-                  /{" "}
-                  <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs">
-                    window.__EH_DATA__
-                  </code>
-                </li>
-                <li>
-                  各页均支持 URL 参数{" "}
-                  <code className="rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs">
-                    ?data=&lt;base64(json)&gt;
-                  </code>
-                  （本地预览用）
-                </li>
-                <li>无注入时各页自动回退到 types 中的 Mock 数据</li>
-              </ul>
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4">
-          {PAGES.map((page) => (
-            <PageCard key={page.href} page={page} />
           ))}
-        </section>
-      </main>
-    </div>
+        </Card>
+
+        {PAGES.map((page) => (
+          <PageCard key={page.href} page={page} />
+        ))}
+
+        <p className="pt-2 text-center text-[11px] text-zinc-400">
+          nanofish · screenshot renderer
+        </p>
+      </Content>
+    </PageShell>
   );
 }
 
 function PageCard({ page }: { page: PageEntry }) {
-  const mockQueryHref = page.supportsDataQuery
-    ? `${page.href}?data=${encodeURIComponent(encodeUrlData(page.mockPreview))}`
-    : page.href;
+  const mockQueryHref = `${page.href}?data=${encodeURIComponent(
+    encodeUrlData(page.mockPreview),
+  )}`;
 
   return (
-    <Card className="overflow-hidden border border-zinc-200 bg-white shadow-sm">
-      <div className={`h-1.5 bg-gradient-to-r ${page.accent}`} />
-      <div className="space-y-4 p-5">
-        <div className="flex items-start gap-4">
+    <Card className="transition-shadow duration-200 hover:shadow-pop">
+      <div className="p-4 sm:p-5">
+        <div className="flex items-start gap-3.5">
           <div
-            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white ${page.iconBg}`}
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${page.accent}`}
           >
             {page.icon}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold tracking-tight">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h2 className="text-[15px] font-semibold tracking-tight text-zinc-900">
                 {page.title}
               </h2>
-              <code className="rounded-md bg-zinc-100 px-2 py-0.5 font-mono text-[11px] text-zinc-600">
+              <code
+                className={`rounded-md px-1.5 py-0.5 font-mono text-[11px] ${page.chipSoft}`}
+              >
                 {page.href}
               </code>
             </div>
-            <p className="mt-1 text-sm text-zinc-500">{page.description}</p>
-            <p className="mt-2 text-xs text-zinc-400">
-              inject:{" "}
-              <code className="font-mono text-zinc-500">{page.injectKey}</code>
-              {" · "}
-              {page.mockSummary}
+            <p className="mt-1 text-[13px] leading-5 text-zinc-500">
+              {page.description}
+            </p>
+            <p className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-zinc-400">
+              <span>inject</span>
+              <code className="rounded bg-zinc-100 px-1 py-px font-mono text-zinc-600">
+                {page.injectKey}
+              </code>
+              <span aria-hidden>·</span>
+              <span className="min-w-0">{page.mockSummary}</span>
             </p>
           </div>
         </div>
 
-        <details className="group rounded-xl border border-zinc-100 bg-zinc-50">
-          <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-zinc-600 hover:text-zinc-900">
+        <details className="group mt-3.5 overflow-hidden rounded-xl border border-black/[0.06]">
+          <summary className="flex cursor-pointer select-none items-center gap-1.5 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-600 transition hover:text-zinc-900">
+            <ChevronRight
+              size={13}
+              className="transition-transform group-open:rotate-90"
+            />
             查看 Mock 参数
           </summary>
-          <pre className="max-h-64 overflow-auto border-t border-zinc-100 px-3 py-2 font-mono text-[11px] leading-relaxed text-zinc-700">
+          <pre className="max-h-60 overflow-auto bg-zinc-950 px-3 py-2.5 font-mono text-[11px] leading-relaxed text-zinc-300">
             {JSON.stringify(page.mockPreview, null, 2)}
           </pre>
         </details>
 
-        <div className="flex flex-wrap gap-2">
-          <Link href={page.href} className={primaryBtnClass}>
-            进入界面（默认 Mock）
-            <ArrowRight size={16} />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href={page.href}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 text-[13px] font-medium text-white transition hover:bg-zinc-700 sm:flex-none"
+          >
+            打开界面
+            <ArrowRight size={15} />
           </Link>
-          <Link href={mockQueryHref} className={secondaryBtnClass}>
-            带 Mock URL 参数打开
-            <ExternalLink size={14} />
+          <Link
+            href={mockQueryHref}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3.5 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-50 sm:flex-none"
+          >
+            带参数打开
+            <Link2 size={14} />
           </Link>
           <Link
             href={page.href}
             target="_blank"
             rel="noreferrer"
-            className={secondaryBtnClass}
+            aria-label="新标签打开"
+            title="新标签打开"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-black/[0.08] bg-white text-zinc-500 transition hover:bg-zinc-50 hover:text-zinc-900"
           >
-            新标签打开
-            <ExternalLink size={14} />
+            <ExternalLink size={15} />
           </Link>
         </div>
       </div>

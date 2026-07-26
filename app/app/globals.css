@@ -1,5 +1,21 @@
 @import "tailwindcss";
-@import "@heroui/styles";
+
+@theme {
+  --font-sans: var(--font-geist-sans), "Nanofish CJK", ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, "Liberation Mono", monospace;
+
+  /* Unified page backdrop — sits behind every white card */
+  --color-paper: #f1f3f6;
+
+  /* Signature elevations, reused by every card in the system */
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05),
+    0 10px 28px -16px rgb(16 24 40 / 0.16);
+  --shadow-pop: 0 2px 8px rgb(16 24 40 / 0.06),
+    0 24px 56px -24px rgb(16 24 40 / 0.26);
+}
 
 @font-face {
   font-family: "Nanofish CJK";
@@ -7,8 +23,20 @@
   font-display: block;
 }
 
+html {
+  background-color: var(--color-paper);
+}
+
 body {
-  font-family: var(--font-geist-sans), "Nanofish CJK", sans-serif;
+  background-color: var(--color-paper);
+  color: var(--color-zinc-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgb(79 70 229 / 0.16);
 }
 
 :focus-visible {
@@ -19,7 +47,7 @@ body {
 /* Chat message markdown — compact, screenshot-friendly */
 .chat-md {
   font-size: 0.9375rem;
-  line-height: 1.55;
+  line-height: 1.6;
   word-break: break-word;
 }
 
@@ -72,7 +100,7 @@ body {
 }
 
 .chat-md code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.85em;
   padding: 0.12em 0.35em;
   border-radius: 0.3rem;

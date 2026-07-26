@@ -2,9 +2,16 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { AlertCircle, BookOpen, ExternalLink, ImageOff, Star, User, FileText } from "lucide-react";
-import { Card } from "@heroui/react";
-import { QRCodeSVG } from "qrcode.react";
+import {
+  BookOpen,
+  CalendarDays,
+  ExternalLink,
+  FileText,
+  FolderOpen,
+  ImageOff,
+  Star,
+  User,
+} from "lucide-react";
 import {
   loadTagDict,
   parseRawTag,
@@ -14,6 +21,8 @@ import {
 import { EhGalleryItem, EhResultData, MockEhData, parseEhResultData } from "./types";
 import { parseUrlData } from "../utils/url-data";
 import { useAssetReadiness } from "../utils/use-asset-readiness";
+import { Card, Content, Notice, PageHeader, PageShell, QrRail } from "../components/chrome";
+
 declare global {
   interface Window {
     __EH_DATA__?: EhResultData;
@@ -56,22 +65,22 @@ function formatPosted(posted: string): string {
 
 /** EH tag namespace → chip colors (aligned with site convention-ish) */
 const TAG_NS_STYLES: Record<string, string> = {
-  language: "bg-sky-100 text-sky-800 ring-sky-200",
-  parody: "bg-lime-100 text-lime-900 ring-lime-200",
-  character: "bg-amber-100 text-amber-900 ring-amber-200",
-  group: "bg-teal-100 text-teal-900 ring-teal-200",
-  artist: "bg-violet-100 text-violet-900 ring-violet-200",
-  cosplayer: "bg-fuchsia-100 text-fuchsia-900 ring-fuchsia-200",
-  male: "bg-blue-100 text-blue-900 ring-blue-200",
-  female: "bg-rose-100 text-rose-900 ring-rose-200",
-  mixed: "bg-indigo-100 text-indigo-900 ring-indigo-200",
-  other: "bg-zinc-100 text-zinc-700 ring-zinc-200",
-  reclass: "bg-orange-100 text-orange-900 ring-orange-200",
-  location: "bg-emerald-100 text-emerald-900 ring-emerald-200",
-  temp: "bg-stone-100 text-stone-700 ring-stone-200",
+  language: "bg-sky-50 text-sky-700 ring-sky-600/15",
+  parody: "bg-lime-50 text-lime-800 ring-lime-600/15",
+  character: "bg-amber-50 text-amber-800 ring-amber-600/15",
+  group: "bg-teal-50 text-teal-800 ring-teal-600/15",
+  artist: "bg-violet-50 text-violet-800 ring-violet-600/15",
+  cosplayer: "bg-fuchsia-50 text-fuchsia-800 ring-fuchsia-600/15",
+  male: "bg-blue-50 text-blue-800 ring-blue-600/15",
+  female: "bg-rose-50 text-rose-800 ring-rose-600/15",
+  mixed: "bg-indigo-50 text-indigo-800 ring-indigo-600/15",
+  other: "bg-zinc-100 text-zinc-600 ring-black/[0.06]",
+  reclass: "bg-orange-50 text-orange-800 ring-orange-600/15",
+  location: "bg-emerald-50 text-emerald-800 ring-emerald-600/15",
+  temp: "bg-stone-100 text-stone-600 ring-black/[0.06]",
 };
 
-const DEFAULT_TAG_STYLE = "bg-zinc-100 text-zinc-700 ring-zinc-200";
+const DEFAULT_TAG_STYLE = "bg-zinc-100 text-zinc-600 ring-black/[0.06]";
 
 function TagChip({ raw, dict }: { raw: string; dict: TagDict }) {
   const { ns } = parseRawTag(raw);
@@ -79,11 +88,11 @@ function TagChip({ raw, dict }: { raw: string; dict: TagDict }) {
   const style = (ns && TAG_NS_STYLES[ns]) || DEFAULT_TAG_STYLE;
   return (
     <span
-      className={`inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[11px] ring-1 ring-inset ${style}`}
+      className={`inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] leading-4 ring-1 ring-inset ${style}`}
       title={ns ? `${ns}: ${label}` : label}
     >
       {ns ? (
-        <span className="shrink-0 opacity-60 font-medium uppercase tracking-wide text-[9px]">
+        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide opacity-55">
           {ns.slice(0, 3)}
         </span>
       ) : null}
@@ -107,7 +116,7 @@ function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
   const hiddenCount = tags.length - visible.length;
 
   return (
-    <div id={contentId} className="flex flex-wrap gap-1.5 pt-1">
+    <div id={contentId} className="flex flex-wrap gap-1.5">
       {visible.map((tag) => (
         <TagChip key={tag} raw={tag} dict={dict} />
       ))}
@@ -117,7 +126,7 @@ function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
           onClick={() => setExpanded(true)}
           aria-expanded="false"
           aria-controls={contentId}
-          className="rounded-full bg-zinc-900 px-2.5 py-0.5 text-[11px] font-medium text-white ring-1 ring-inset ring-zinc-800"
+          className="rounded-md bg-zinc-900 px-2 py-0.5 text-[11px] font-medium leading-4 text-white"
           title={`展开剩余 ${hiddenCount} 个标签`}
         >
           +{hiddenCount}
@@ -129,7 +138,7 @@ function TagList({ tags, dict }: { tags: string[]; dict: TagDict }) {
           onClick={() => setExpanded(false)}
           aria-expanded="true"
           aria-controls={contentId}
-          className="rounded-full bg-zinc-200 px-2.5 py-0.5 text-[11px] font-medium text-zinc-700 ring-1 ring-inset ring-zinc-300"
+          className="rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-medium leading-4 text-zinc-600 ring-1 ring-inset ring-black/[0.06]"
         >
           收起
         </button>
@@ -166,39 +175,26 @@ export default function EhResultsPage() {
   }, [beginAssetTracking]);
 
   if (!data) {
-    return <div className="min-h-screen bg-zinc-50" data-ready="false" />;
+    return <div className="min-h-screen bg-paper" data-ready="false" />;
   }
 
   return (
-    <div
-      className="min-h-screen bg-zinc-50 text-zinc-900"
-      data-ready={status}
-    >
-      <header className="border-b border-zinc-200 bg-white px-6 py-4">
-        <div className="mx-auto flex max-w-4xl items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-600 text-white">
-            <BookOpen size={20} />
-          </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold tracking-tight">
-              EH 搜索结果
-            </h1>
-            <p className="truncate text-sm text-zinc-500">
-              「{data.query}」· {data.results.length} 条
-            </p>
-          </div>
-        </div>
-      </header>
+    <PageShell ready={status}>
+      <PageHeader
+        icon={<BookOpen size={18} />}
+        accent="bg-rose-600 shadow-rose-600/25"
+        title="EH 搜索结果"
+        subtitle={`「${data.query}」· ${data.results.length} 条结果`}
+      />
 
-      <main className="mx-auto max-w-4xl space-y-4 p-6 pb-16">
-        {error ? (
-          <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-900">
-            <AlertCircle size={16} className="mt-0.5 shrink-0" />
-            <p>{error}</p>
-          </div>
-        ) : null}
+      <Content className="space-y-4 py-5 pb-14">
+        {error ? <Notice>{error}</Notice> : null}
+
         {data.results.length === 0 ? (
-          <p className="text-center text-zinc-500">无结果</p>
+          <Card className="flex flex-col items-center gap-2.5 p-10 text-center">
+            <FolderOpen size={26} className="text-zinc-300" />
+            <p className="text-sm text-zinc-500">没有找到匹配的画廊</p>
+          </Card>
         ) : (
           data.results.map((item, idx) => (
             <ResultCard
@@ -210,8 +206,8 @@ export default function EhResultsPage() {
             />
           ))
         )}
-      </main>
-    </div>
+      </Content>
+    </PageShell>
   );
 }
 
@@ -229,77 +225,65 @@ function ResultCard({
   const [imgFailed, setImgFailed] = useState(!item.thumb);
 
   return (
-    <Card className="overflow-hidden border border-zinc-200 bg-white shadow-sm">
-      <div className="flex gap-4 p-4">
-        <div className="flex w-28 shrink-0 flex-col items-center gap-2">
-          <div className="h-36 w-28 overflow-hidden rounded-lg bg-zinc-100">
-            {!imgFailed && item.thumb ? (
-                <img
-                  src={item.thumb}
-                  alt={`${item.title} 的封面`}
-                  className="h-full w-full object-cover"
-                  referrerPolicy="no-referrer"
-                  onLoad={onAsset}
-                  onError={() => {
-                    setImgFailed(true);
-                    onAsset();
-                  }}
-              />
-            ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-zinc-400">
-                <ImageOff size={22} />
-                <span className="text-[10px]">no thumb</span>
-              </div>
-            )}
-          </div>
-          {item.url ? (
-            <div className="hidden w-full flex-col items-center gap-1 sm:flex">
-              <div className="rounded-md border border-zinc-200 bg-white p-1">
-                <QRCodeSVG
-                  value={item.url}
-                  size={104}
-                  level="M"
-                  marginSize={1}
-                  bgColor="#ffffff"
-                  fgColor="#18181b"
-                />
-              </div>
-              <span className="text-[10px] text-zinc-400">扫码打开</span>
+    <Card>
+      <div className="flex gap-3.5 p-3.5 sm:gap-4 sm:p-4">
+        <div className="aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-lg bg-zinc-100 ring-1 ring-inset ring-black/[0.04] sm:w-[128px]">
+          {!imgFailed && item.thumb ? (
+            <img
+              src={item.thumb}
+              alt={`${item.title} 的封面`}
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+              onLoad={onAsset}
+              onError={() => {
+                setImgFailed(true);
+                onAsset();
+              }}
+            />
+          ) : (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-zinc-300">
+              <ImageOff size={22} />
+              <span className="text-[10px] text-zinc-400">no thumb</span>
             </div>
-          ) : null}
+          )}
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col space-y-2">
-          <div className="flex flex-wrap items-start gap-2">
-            <span className="rounded-md bg-zinc-900 px-2 py-0.5 text-[11px] font-medium text-white">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-md bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-white">
               #{index + 1}
             </span>
-            <span className="rounded-md bg-rose-100 px-2 py-0.5 text-[11px] font-medium text-rose-800">
+            <span className="rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-rose-700 ring-1 ring-inset ring-rose-600/15">
               {item.category || "Unknown"}
             </span>
           </div>
 
-          <h2 className="text-base font-semibold leading-snug break-words">
+          <h2 className="text-[15px] font-semibold leading-snug break-words text-zinc-900">
             {item.title}
           </h2>
           {item.title_jpn ? (
-            <p className="text-sm text-zinc-500 break-words">{item.title_jpn}</p>
+            <p className="-mt-1 text-xs leading-5 break-words text-zinc-500">
+              {item.title_jpn}
+            </p>
           ) : null}
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600">
+          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-zinc-500">
             <span className="inline-flex items-center gap-1">
-              <User size={12} />
+              <User size={12} className="text-zinc-400" />
               {item.uploader || "-"}
             </span>
             <span className="inline-flex items-center gap-1">
-              <FileText size={12} />
+              <FileText size={12} className="text-zinc-400" />
               {item.filecount || "?"} 页
             </span>
             <span className="inline-flex items-center gap-1">
-              <Star size={12} />
+              <Star size={12} className="fill-amber-400 text-amber-400" />
               {item.rating || "-"}
             </span>
-            <span>{formatPosted(item.posted)}</span>
+            <span className="inline-flex items-center gap-1">
+              <CalendarDays size={12} className="text-zinc-400" />
+              {formatPosted(item.posted)}
+            </span>
           </div>
 
           {item.tags?.length > 0 ? (
@@ -307,20 +291,22 @@ function ResultCard({
           ) : null}
 
           {item.url ? (
-            <div className="mt-auto rounded-md border border-zinc-100 bg-zinc-50 px-2.5 py-1.5">
+            <div className="mt-auto flex items-center rounded-lg bg-zinc-50 px-2.5 py-1.5 ring-1 ring-inset ring-black/[0.04]">
               <a
                 href={item.url}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`${item.title}（在新标签页打开）`}
-                className="inline-flex items-start gap-1 font-mono text-[11px] break-all text-zinc-500 hover:text-zinc-900 hover:underline"
+                className="inline-flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-zinc-500 hover:text-zinc-900"
               >
-                {item.url}
-                <ExternalLink size={12} className="mt-0.5 shrink-0" aria-hidden />
+                <span className="truncate">{item.url}</span>
+                <ExternalLink size={11} className="shrink-0" aria-hidden />
               </a>
             </div>
           ) : null}
         </div>
+
+        {item.url ? <QrRail url={item.url} /> : null}
       </div>
     </Card>
   );

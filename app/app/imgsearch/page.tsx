@@ -2,8 +2,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Card } from "@heroui/react";
-import { QRCodeSVG } from "qrcode.react";
 import {
   ExternalLink,
   ImageOff,
@@ -19,6 +17,7 @@ import {
 } from "./types";
 import { parseUrlData } from "../utils/url-data";
 import { useAssetReadiness } from "../utils/use-asset-readiness";
+import { Card, Content, Notice, PageHeader, PageShell, QrRail } from "../components/chrome";
 
 declare global {
   interface Window {
@@ -53,11 +52,26 @@ function similarityLabel(similarity: number | null): string {
     : `${similarity.toFixed(2)}%`;
 }
 
-function similarityColor(similarity: number | null): string {
-  if (similarity === null) return "bg-slate-100 text-slate-600";
-  if (similarity >= 80) return "bg-emerald-100 text-emerald-800";
-  if (similarity >= 60) return "bg-amber-100 text-amber-800";
-  return "bg-slate-100 text-slate-600";
+function similarityTone(similarity: number | null): {
+  badge: string;
+  bar: string;
+} {
+  if (similarity !== null && similarity >= 80) {
+    return {
+      badge: "bg-emerald-50 text-emerald-700 ring-emerald-600/15",
+      bar: "bg-emerald-500",
+    };
+  }
+  if (similarity !== null && similarity >= 60) {
+    return {
+      badge: "bg-amber-50 text-amber-700 ring-amber-600/15",
+      bar: "bg-amber-500",
+    };
+  }
+  return {
+    badge: "bg-zinc-100 text-zinc-600 ring-black/[0.06]",
+    bar: "bg-zinc-400",
+  };
 }
 
 function displayUrl(value: string): string {
@@ -89,106 +103,92 @@ export default function ImageSearchPage() {
   }, [beginAssetTracking]);
 
   if (!data) {
-    return <div className="min-h-screen bg-slate-50" data-ready="false" />;
+    return <div className="min-h-screen bg-paper" data-ready="false" />;
   }
 
   return (
-    <div
-      className="min-h-screen bg-slate-50 text-slate-900"
-      data-ready={status}
-    >
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-5 py-4">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-700 text-white shadow-sm shadow-cyan-700/25">
-            <Search size={20} />
+    <PageShell ready={status}>
+      <PageHeader
+        icon={<Search size={18} />}
+        accent="bg-teal-600 shadow-teal-600/25"
+        title="以图搜图"
+        subtitle={
+          data.results.length
+            ? `发现 ${data.results.length} 个匹配结果`
+            : "未发现匹配结果"
+        }
+      />
+
+      <Content className="space-y-4 py-5 pb-14">
+        <Card className="flex items-center gap-4 p-4">
+          <div className="flex h-28 w-[5.25rem] shrink-0 items-center justify-center overflow-hidden rounded-xl bg-zinc-900 p-1.5 sm:h-32 sm:w-24">
+            {data.image && !imageFailed ? (
+              <img
+                src={data.image}
+                alt="待搜索图片"
+                className="h-full w-full rounded-lg object-contain"
+                referrerPolicy="no-referrer"
+                onLoad={completeAsset}
+                onError={() => {
+                  setImageFailed(true);
+                  completeAsset();
+                }}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-1.5 text-zinc-500">
+                <ImageOff size={22} />
+                <span className="text-[10px]">原图不可预览</span>
+              </div>
+            )}
           </div>
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight">以图搜图</h1>
-            <p className="text-sm text-slate-500">
-              {data.results.length ? `发现 ${data.results.length} 个匹配结果` : "未发现匹配结果"}
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-600">
+              Search target
+            </p>
+            <h2 className="mt-0.5 text-[15px] font-semibold tracking-tight text-zinc-900">
+              搜索目标
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-zinc-500">
+              已完成反向匹配，下方结果按相似度排序。
             </p>
           </div>
+        </Card>
+
+        <div className="flex items-center justify-between px-1">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            匹配结果
+          </h2>
+          <span className="rounded-full bg-teal-50 px-2.5 py-0.5 text-[11px] font-medium text-teal-700 ring-1 ring-inset ring-teal-600/10">
+            {data.results.length} 个候选
+          </span>
         </div>
-      </header>
 
-      <main className="mx-auto max-w-5xl px-5 py-6 pb-12">
-        <div className="grid items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="overflow-hidden rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-900/10 lg:sticky lg:top-6">
-            <div className="border-b border-white/10 px-4 py-3">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
-                Search target
-              </p>
-              <h2 className="mt-0.5 text-base font-semibold">搜索目标</h2>
-            </div>
-            <div className="flex aspect-[3/4] items-center justify-center bg-slate-800 p-3">
-              {data.image && !imageFailed ? (
-                <img
-                  src={data.image}
-                  alt="待搜索图片"
-                  className="h-full w-full rounded-lg object-contain"
-                  referrerPolicy="no-referrer"
-                  onLoad={completeAsset}
-                  onError={() => {
-                    setImageFailed(true);
-                    completeAsset();
-                  }}
-                />
-              ) : (
-                <div className="flex flex-col items-center gap-2 text-slate-400">
-                  <ImageOff size={26} />
-                  <span className="text-xs">原图不可预览</span>
-                </div>
-              )}
-            </div>
-            <div className="px-4 py-3 text-xs leading-5 text-slate-300">
-              已完成反向匹配，右侧结果按相似度排序。
-            </div>
-          </aside>
+        {loadError ? <Notice>{loadError}</Notice> : null}
 
-          <section className="min-w-0 space-y-3">
-            <div className="flex items-end justify-between gap-4 border-b border-slate-200 pb-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-700">
-                  Matches
-                </p>
-                <h2 className="mt-0.5 text-xl font-semibold tracking-tight">搜索结果</h2>
-              </div>
-              <p className="rounded-full bg-cyan-50 px-3 py-1 text-sm font-medium text-cyan-800">
-                {data.results.length} 个候选匹配
-              </p>
-            </div>
+        {data.results.length ? (
+          data.results.map((result, index) => (
+            <ResultCard
+              key={`${result.url}-${index}`}
+              index={index}
+              result={result}
+              onImageLoad={completeAsset}
+            />
+          ))
+        ) : (
+          <Card className="flex flex-col items-center gap-2.5 p-10 text-center">
+            <Sparkles size={26} className="text-zinc-300" />
+            <p className="text-sm text-zinc-500">没有找到相似图片</p>
+          </Card>
+        )}
 
-            {data.results.length ? (
-              data.results.map((result, index) => (
-                <ResultCard
-                  key={`${result.url}-${index}`}
-                  index={index}
-                  result={result}
-                  onImageLoad={completeAsset}
-                />
-              ))
-            ) : (
-              <Card className="border border-slate-200 bg-white p-8 text-center shadow-sm">
-                <Sparkles className="mx-auto text-slate-300" size={28} />
-                <p className="mt-3 text-sm text-slate-500">没有找到相似图片</p>
-              </Card>
-            )}
-
-            {data.errors.length ? (
-              <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                <p className="font-medium">部分搜索来源不可用</p>
-                <p className="mt-1 text-xs text-amber-800">{data.errors.join("；")}</p>
-              </section>
-            ) : null}
-            {loadError ? (
-              <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                {loadError}
-              </section>
-            ) : null}
-          </section>
-        </div>
-      </main>
-    </div>
+        {data.errors.length ? (
+          <Notice>
+            <p className="font-medium">部分搜索来源不可用</p>
+            <p className="mt-0.5 text-xs text-amber-800">{data.errors.join("；")}</p>
+          </Notice>
+        ) : null}
+      </Content>
+    </PageShell>
   );
 }
 
@@ -203,77 +203,83 @@ function ResultCard({
 }) {
   const title = result.title || "未提供标题";
   const [thumbnailFailed, setThumbnailFailed] = useState(!result.thumbnail);
+  const tone = similarityTone(result.similarity);
 
   return (
-    <Card className="border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex gap-3 p-3 sm:gap-4 sm:p-4">
-        <div className="relative flex h-32 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 sm:h-36 sm:w-28">
+    <Card>
+      <div className="flex gap-3.5 p-3.5 sm:gap-4 sm:p-4">
+        <div className="relative aspect-[3/4] w-24 shrink-0 overflow-hidden rounded-lg bg-zinc-100 ring-1 ring-inset ring-black/[0.04] sm:w-[120px]">
           {!thumbnailFailed ? (
-              <img
-                src={result.thumbnail}
-                alt={`${title} 的匹配图片`}
-                className="h-full w-full object-cover"
-                referrerPolicy="no-referrer"
-                onLoad={onImageLoad}
-                onError={() => {
+            <img
+              src={result.thumbnail}
+              alt={`${title} 的匹配图片`}
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+              onLoad={onImageLoad}
+              onError={() => {
                 setThumbnailFailed(true);
                 onImageLoad();
               }}
             />
           ) : (
-            <ImageOff className="text-slate-300" size={22} />
+            <div className="flex h-full w-full items-center justify-center text-zinc-300">
+              <ImageOff size={22} />
+            </div>
           )}
-          <span className="absolute left-1.5 top-1.5 rounded-md bg-slate-950/90 px-1.5 py-0.5 text-[10px] font-bold text-white">
+          <span className="absolute left-1.5 top-1.5 rounded-md bg-zinc-950/90 px-1.5 py-0.5 text-[10px] font-bold text-white">
             #{index + 1}
           </span>
         </div>
-        <div className="flex min-w-0 flex-1 flex-col py-0.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">
+
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <span className="rounded-md bg-zinc-900 px-1.5 py-0.5 text-[10px] font-semibold leading-4 text-white">
               {result.source || "Unknown"}
             </span>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${similarityColor(result.similarity)}`}>
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold leading-4 ring-1 ring-inset ${tone.badge}`}
+            >
               {similarityLabel(result.similarity)}
             </span>
+            {result.similarity !== null ? (
+              <span className="hidden h-1 w-20 overflow-hidden rounded-full bg-zinc-100 min-[420px]:block">
+                <span
+                  className={`block h-full rounded-full ${tone.bar}`}
+                  style={{ width: `${Math.min(100, Math.max(0, result.similarity))}%` }}
+                />
+              </span>
+            ) : null}
           </div>
-          <h3 className="mt-2 line-clamp-2 break-words text-base font-semibold leading-snug text-slate-900">
+
+          <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug break-words text-zinc-900">
             {title}
           </h3>
+
           {result.author ? (
-            <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-slate-500">
-              <UserRound size={14} />
-              {result.author}
+            <p className="-mt-1 inline-flex items-center gap-1 text-xs text-zinc-500">
+              <UserRound size={12} className="text-zinc-400" />
+              <span className="truncate">{result.author}</span>
             </p>
           ) : null}
+
           {result.url ? (
-            <div className="mt-auto flex items-end justify-between gap-3 pt-3">
+            <div className="mt-auto flex items-center rounded-lg bg-zinc-50 px-2.5 py-1.5 ring-1 ring-inset ring-black/[0.04]">
               <a
                 href={result.url}
                 target="_blank"
                 rel="noreferrer"
                 aria-label={`${title}（在新标签页打开）`}
-                className="group flex min-w-0 items-center gap-1.5 text-sm font-medium text-cyan-700"
                 title={result.url}
+                className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-teal-700 hover:text-teal-900"
               >
-                <ExternalLink className="shrink-0" size={14} />
-                <span className="truncate group-hover:underline">{displayUrl(result.url)}</span>
+                <ExternalLink size={12} className="shrink-0" aria-hidden />
+                <span className="truncate">{displayUrl(result.url)}</span>
               </a>
-              <div className="hidden shrink-0 items-center gap-2 text-right text-[10px] font-medium text-slate-400 sm:flex">
-                <span className="hidden sm:inline">扫码打开</span>
-                <div className="rounded-md border border-slate-200 bg-white p-1">
-                  <QRCodeSVG
-                    value={result.url}
-                    size={96}
-                    level="L"
-                    marginSize={2}
-                    bgColor="#ffffff"
-                    fgColor="#0f172a"
-                  />
-                </div>
-              </div>
             </div>
           ) : null}
         </div>
+
+        {result.url ? <QrRail url={result.url} /> : null}
       </div>
     </Card>
   );
