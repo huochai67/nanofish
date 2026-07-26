@@ -1,4 +1,4 @@
-"""HTTP client that obtains Cloudflare cookies from FlareSolverr."""
+"""HTTP client that optionally obtains Cloudflare cookies from FlareSolverr."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .http import HttpRequestError, get_http_proxy, http_error_message, log_http
 
 
 class CloudScraperClient:
-    """Keep FlareSolverr-derived cookies while exposing the legacy request API."""
+    """Keep optional FlareSolverr-derived cookies while exposing the request API."""
 
     def __init__(
         self,
@@ -30,7 +30,7 @@ class CloudScraperClient:
         resolved_config = config or get_plugin_config(Config)
         self._proxy = get_http_proxy() if proxy is None else proxy
         self._timeout = resolved_config.http_timeout
-        self._flaresolverr_url = resolved_config.flaresolverr_url
+        self._flaresolverr_url = resolved_config.flaresolverr_url.strip()
         self._debug_name = debug_name
         self._trace = resolved_config.http_trace if trace is None else trace
         self._headers = headers or {}
@@ -71,7 +71,9 @@ class CloudScraperClient:
                 response.raise_for_status()
                 data = response.json()
         except httpx.HTTPError as e:
-            status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
+            status = (
+                e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
+            )
             raise HttpRequestError(http_error_message(e), status=status) from e
         except ValueError as e:
             raise HttpRequestError("请求失败，请稍后重试") from e
@@ -153,10 +155,10 @@ class CloudScraperClient:
         params = kwargs.pop("params", None)
         headers = kwargs.pop("headers", None)
         request_url = str(httpx.URL(url, params=params))
-        if method.upper() == "GET":
+        if self._flaresolverr_url and method.upper() == "GET":
             # The browser response is the authoritative result for each GET URL.
             await self._solve(request_url, request_timeout)
-        else:
+        elif self._flaresolverr_url:
             await self._ensure_solution(request_url, request_timeout)
         if (
             method.upper() == "GET"
@@ -185,7 +187,7 @@ class CloudScraperClient:
                     **kwargs,
                 )
             self._update_cookies(response)
-            if response.status_code in {403, 503}:
+            if self._flaresolverr_url and response.status_code in {403, 503}:
                 await self._ensure_solution(request_url, request_timeout, force=True)
                 async with httpx.AsyncClient(
                     proxy=self._proxy,

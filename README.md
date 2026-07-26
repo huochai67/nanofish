@@ -128,7 +128,7 @@ docker compose up -d --build
 | `eh_ipb_*` / `eh_sk` / `eh_igneous` | `config.yaml` 中的 ExHentai cookie |
 | `imgsearch_*` | `config.yaml` 中的反向搜图上游参数 |
 | `PROXY` | 可选代理，应用于全部后端外部请求（兼容读取 `HTTP_PROXY` / `HTTPS_PROXY`） |
-| `FLARESOLVERR_URL` | FlareSolverr API 地址；Compose 默认 `http://flaresolverr:8191/v1` |
+| `FLARESOLVERR_URL` | FlareSolverr API 地址；Compose 默认 `http://flaresolverr:8191/v1`，设为空可禁用 |
 
 标签中文翻译在 **Next 前端**完成（[EhTagTranslation](https://github.com/EhTagTranslation/Database)）。构建/开发时会下载字典到 `app/public/ehtag-dict.json`（不入库）；Bot 只传原始 `namespace:tag`。
 

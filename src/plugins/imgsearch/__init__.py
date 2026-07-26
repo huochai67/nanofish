@@ -97,6 +97,10 @@ _SOUTUBOT_HOSTS = {
     "ehentai": "e-hentai.org",
     "panda": "panda.chaika.moe",
 }
+_SOUTUBOT_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
 _HTTP_UNAUTHORIZED = 401
 _HTTP_FORBIDDEN = 403
 
@@ -143,6 +147,7 @@ class ImageSearchClient:
         self._soutubot_m: int | None = None
         self._soutubot_client = CloudScraperClient(
             proxy=config.proxy,
+            headers={"user-agent": _SOUTUBOT_USER_AGENT},
             debug_name="Soutubot",
         )
 
@@ -169,9 +174,7 @@ class ImageSearchClient:
             await self._refresh_soutubot_cache()
         if self._soutubot_m is None:
             raise HttpRequestError("Soutubot 初始化失败")
-        user_agent = self._soutubot_client.user_agent
-        if not user_agent:
-            raise HttpRequestError("Soutubot 初始化失败")
+        user_agent = self._soutubot_client.user_agent or _SOUTUBOT_USER_AGENT
         return {
             "accept": "application/json, text/plain, */*",
             "dnt": "1",

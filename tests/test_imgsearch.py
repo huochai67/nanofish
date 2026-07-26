@@ -3,7 +3,11 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, cast
 from unittest.mock import AsyncMock
 
-from src.plugins.imgsearch import ImageSearchClient, _soutubot_api_key
+from src.plugins.imgsearch import (
+    _SOUTUBOT_USER_AGENT,
+    ImageSearchClient,
+    _soutubot_api_key,
+)
 
 if TYPE_CHECKING:
     from src.plugins.utils import CloudScraperClient
@@ -25,3 +29,17 @@ def test_soutubot_uses_flaresolverr_session_for_initialization() -> None:
     )
     assert headers["user-agent"] == solver.user_agent
     assert headers["x-api-key"] == _soutubot_api_key(123, solver.user_agent)
+
+
+def test_soutubot_uses_fallback_user_agent_without_flaresolverr() -> None:
+    client = ImageSearchClient()
+    direct_client = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(text="window.config = {m: 123,};")),
+        user_agent=None,
+    )
+    client._soutubot_client = cast("CloudScraperClient", direct_client)
+
+    headers = asyncio.run(client._soutubot_headers())
+
+    assert headers["user-agent"] == _SOUTUBOT_USER_AGENT
+    assert headers["x-api-key"] == _soutubot_api_key(123, _SOUTUBOT_USER_AGENT)

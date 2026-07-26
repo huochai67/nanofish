@@ -20,5 +20,5 @@ class Config(BaseModel):
     )
     flaresolverr_url: str = Field(
         default="http://flaresolverr:8191/v1",
-        description="FlareSolverr API 地址",
+        description="FlareSolverr API 地址（留空时禁用）",
     )
