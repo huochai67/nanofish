@@ -1,10 +1,5 @@
 import asyncio
 
-import nonebot
-
-nonebot.init()
-nonebot.load_plugins("src/plugins")
-
 from src.plugins.media_parser.parsers.base import BaseParser
 from src.plugins.media_parser.parsers.music import (
     MusicParser,

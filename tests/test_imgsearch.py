@@ -1,0 +1,27 @@
+import asyncio
+from types import SimpleNamespace
+from typing import TYPE_CHECKING, cast
+from unittest.mock import AsyncMock
+
+from src.plugins.imgsearch import ImageSearchClient, _soutubot_api_key
+
+if TYPE_CHECKING:
+    from src.plugins.utils import CloudScraperClient
+
+
+def test_soutubot_uses_flaresolverr_session_for_initialization() -> None:
+    client = ImageSearchClient()
+    solver = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(text="window.config = {m: 123,};")),
+        user_agent="FlareSolverr test browser",
+    )
+    client._soutubot_client = cast("CloudScraperClient", solver)
+
+    headers = asyncio.run(client._soutubot_headers())
+
+    solver.get.assert_awaited_once_with(
+        "https://soutubot.moe/",
+        timeout=30.0,
+    )
+    assert headers["user-agent"] == solver.user_agent
+    assert headers["x-api-key"] == _soutubot_api_key(123, solver.user_agent)

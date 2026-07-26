@@ -30,4 +30,11 @@ services:
       APP_API_BASE: http://nanofish-frontend:3000
     depends_on:
       - nanofish-frontend
+      - flaresolverr
+    restart: always
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    environment:
+      LOG_LEVEL: info
     restart: always

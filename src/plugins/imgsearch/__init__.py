@@ -22,6 +22,7 @@ require("utils")
 from ..acl import check_quota, consume_quota, require_command
 from ..app import app_imgsearch_image_cq
 from ..utils import (
+    CloudScraperClient,
     HttpRequestError,
     finish_processing_reply,
     get_first_image,
@@ -96,12 +97,8 @@ _SOUTUBOT_HOSTS = {
     "ehentai": "e-hentai.org",
     "panda": "panda.chaika.moe",
 }
-
-_SOUTUBOT_USER_AGENT = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-)
-
+_HTTP_UNAUTHORIZED = 401
+_HTTP_FORBIDDEN = 403
 
 def _soutubot_result_url(data: dict[str, Any]) -> str:
     direct_url = _first_text(data, "url", "source_url", "link", "ext_urls")
@@ -144,14 +141,24 @@ async def _download_image(url: str) -> tuple[bytes, str]:
 class ImageSearchClient:
     def __init__(self) -> None:
         self._soutubot_m: int | None = None
+        self._soutubot_client = CloudScraperClient(
+            proxy=config.proxy,
+            debug_name="Soutubot",
+        )
 
     async def _refresh_soutubot_cache(self) -> None:
-        response = await http_get(
-            "https://soutubot.moe/",
-            headers={"user-agent": _SOUTUBOT_USER_AGENT},
-            proxy=config.proxy,
-            timeout=config.imgsearch_timeout,
-        )
+        try:
+            response = await self._soutubot_client.get(
+                "https://soutubot.moe/",
+                timeout=config.imgsearch_timeout,
+            )
+        except HttpRequestError as e:
+            if e.status == _HTTP_FORBIDDEN:
+                raise HttpRequestError(
+                    "Soutubot 正在要求 Cloudflare 浏览器验证，暂时不可用",
+                    status=e.status,
+                ) from e
+            raise
         match = re.search(r"m:\s*(-?\d+),", response.text)
         if match is None or int(match.group(1)) <= 0:
             raise HttpRequestError("Soutubot 初始化失败")
@@ -162,13 +169,16 @@ class ImageSearchClient:
             await self._refresh_soutubot_cache()
         if self._soutubot_m is None:
             raise HttpRequestError("Soutubot 初始化失败")
+        user_agent = self._soutubot_client.user_agent
+        if not user_agent:
+            raise HttpRequestError("Soutubot 初始化失败")
         return {
             "accept": "application/json, text/plain, */*",
             "dnt": "1",
             "origin": "https://soutubot.moe",
             "referer": "https://soutubot.moe/",
-            "user-agent": _SOUTUBOT_USER_AGENT,
-            "x-api-key": _soutubot_api_key(self._soutubot_m, _SOUTUBOT_USER_AGENT),
+            "user-agent": user_agent,
+            "x-api-key": _soutubot_api_key(self._soutubot_m, user_agent),
             "x-requested-with": "XMLHttpRequest",
         }
 
@@ -246,24 +256,24 @@ class ImageSearchClient:
             content_type,
         )
         try:
-            response = await http_post(
+            response = await self._soutubot_client.post(
                 "https://soutubot.moe/api/search",
                 data={"factor": str(config.imgsearch_soutubot_factor)},
                 files={"file": (_image_filename(content_type), image, content_type)},
                 headers=await self._soutubot_headers(),
-                proxy=config.proxy,
                 timeout=config.imgsearch_timeout,
             )
         except HttpRequestError as e:
-            if e.status not in {401, 403}:
+            # CloudScraperClient already refreshes its Cloudflare session on 403.
+            # A 401 means the short-lived derived key may have expired.
+            if e.status != _HTTP_UNAUTHORIZED:
                 raise
             self._soutubot_m = None
-            response = await http_post(
+            response = await self._soutubot_client.post(
                 "https://soutubot.moe/api/search",
                 data={"factor": str(config.imgsearch_soutubot_factor)},
                 files={"file": (_image_filename(content_type), image, content_type)},
                 headers=await self._soutubot_headers(),
-                proxy=config.proxy,
                 timeout=config.imgsearch_timeout,
             )
         try:
