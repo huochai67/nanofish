@@ -31,6 +31,7 @@ import {
   type ParserScreenshotData,
   type ParserStats,
 } from "./types";
+import { parseParserDebugPayload, parserPreviewStorageKey } from "./preview-storage";
 import { parseUrlData } from "../utils/url-data";
 import { useAssetReadiness } from "../utils/use-asset-readiness";
 import { Content, Notice, PageShell } from "../components/chrome";
@@ -192,7 +193,38 @@ function loadParserData(): { data: ParserScreenshotData; error: string | null } 
   }
 
   if (typeof window !== "undefined") {
-    const value = new URLSearchParams(window.location.search).get("data");
+    const params = new URLSearchParams(window.location.search);
+    const payloadId = params.get("payload");
+    if (payloadId) {
+      const payload = sessionStorage.getItem(parserPreviewStorageKey(payloadId));
+      if (!payload) {
+        const error = "上传的 JSON 数据不存在或已过期，已回退到默认 Mock 数据。";
+        console.log("[parser preview] Uploaded payload is missing", { payloadId });
+        return { data: MockParserData, error };
+      }
+
+      try {
+        const parsed = parseParserDebugPayload(JSON.parse(payload));
+        if (parsed.data) return { data: parsed.data, error: null };
+        console.log("[parser preview] Uploaded debug payload was rejected", {
+          payloadId,
+          error: parsed.error,
+        });
+        return {
+          data: MockParserData,
+          error: `上传的调试文件无效：${parsed.error}`,
+        };
+      } catch (error) {
+        console.log("[parser preview] Uploaded payload could not be parsed", error);
+        return {
+          data: MockParserData,
+          error: "上传的 JSON 无法解析，已回退到默认 Mock 数据。",
+        };
+      }
+
+    }
+
+    const value = params.get("data");
     if (value) {
       const parsed = parseUrlData(value, parseParserScreenshotData);
       return parsed.data

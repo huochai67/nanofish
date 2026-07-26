@@ -7,11 +7,12 @@ from collections import defaultdict
 import yt_dlp
 from msgspec import Struct, convert
 from nonebot import logger
+from yt_dlp.utils import DownloadError
 
 from .task import auto_task
 from ..utils import LimitedSizeDict, generate_file_name
 from ..config import pconfig
-from ..exception import ParseException, IgnoreException
+from ..exception import IgnoreException, ParseException, TipException
 
 
 class VideoInfo(Struct):
@@ -31,6 +32,12 @@ class VideoInfo(Struct):
     """简介"""
     channel_id: str
     """频道 id"""
+    view_count: int | None = None
+    """播放量"""
+    like_count: int | None = None
+    """点赞数"""
+    comment_count: int | None = None
+    """评论数"""
 
     @property
     def author_name(self) -> str:
@@ -59,12 +66,21 @@ class YtdlpDownloader:
             "quiet": True,
             "skip_download": "1",
             "force_generic_extractor": True,
+            "js_runtimes": {"node": {}},
         }
-        self._download_base_opts: _Params = {}
+        self._download_base_opts: _Params = {"js_runtimes": {"node": {}}}
         self._url_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         if proxy := pconfig.proxy:
             self._download_base_opts["proxy"] = proxy
             self._extract_base_opts["proxy"] = proxy
+
+    @staticmethod
+    async def _run_ytdlp(func, *args, **kwargs):
+        try:
+            return await asyncio.to_thread(func, *args, **kwargs)
+        except DownloadError as e:
+            logger.warning(f"yt-dlp failed: {e}")
+            raise TipException("媒体资源获取失败，请稍后重试") from e
 
     async def extract_video_info(self, url: str, cookiefile: Path | None = None) -> VideoInfo:
         """Get video info by yt-dlp"""
@@ -78,7 +94,7 @@ class YtdlpDownloader:
             ydl_opts["cookiefile"] = str(cookiefile)
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = await asyncio.to_thread(ydl.extract_info, url, download=False)
+            info_dict = await self._run_ytdlp(ydl.extract_info, url, download=False)
             if not info_dict:
                 raise ParseException("获取视频信息失败")
 
@@ -96,7 +112,7 @@ class YtdlpDownloader:
             ydl_opts["cookiefile"] = str(cookiefile)
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = await asyncio.to_thread(ydl.extract_info, url, download=False)
+            info_dict = await self._run_ytdlp(ydl.extract_info, url, download=False)
         if not info_dict:
             raise ParseException("获取音频信息失败")
 
@@ -150,7 +166,7 @@ class YtdlpDownloader:
 
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    await asyncio.to_thread(ydl.download, [url])
+                    await self._run_ytdlp(ydl.download, [url])
             except Exception:
                 if video_path.exists():
                     return video_path
@@ -195,7 +211,7 @@ class YtdlpDownloader:
                 ydl_opts["cookiefile"] = str(cookiefile)
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    await asyncio.to_thread(ydl.download, [url])
+                    await self._run_ytdlp(ydl.download, [url])
             except Exception:
                 if audio_path.exists():
                     return audio_path

@@ -24,7 +24,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "rich>=13.0.0",
     "c2pa-python>=0.37.1,<1.0.0",
-    "yt-dlp>=2025.1.15",
+    "yt-dlp[default]>=2025.1.15",
 ]
 
 [project.optional-dependencies]

@@ -26,7 +26,11 @@ class StreamDownloader:
     def __init__(self):
         self.headers: dict[str, str] = COMMON_HEADER.copy()
         self.cache_dir: Path = pconfig.cache_dir
-        self.client: httpx.AsyncClient = httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT, verify=False)
+        self.client: httpx.AsyncClient = httpx.AsyncClient(
+            timeout=DOWNLOAD_TIMEOUT,
+            verify=False,
+            proxy=pconfig.proxy,
+        )
 
     async def aclose(self):
         await self.client.aclose()
@@ -102,7 +106,10 @@ class StreamDownloader:
         file_path: Path,
         headers: dict[str, str],
     ) -> Path:
-        async with curl_cffi.AsyncSession(allow_redirects=True) as session:
+        async with curl_cffi.AsyncSession(
+            allow_redirects=True,
+            proxy=pconfig.proxy,
+        ) as session:
             response: curl_cffi.Response = await session.get(
                 url,
                 headers=headers,

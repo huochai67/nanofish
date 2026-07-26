@@ -2,8 +2,10 @@ import re
 from pathlib import Path
 from typing import ClassVar
 
-from httpx import AsyncClient
+import httpx
+from nonebot import logger
 
+from src.proxy import get_http_proxy_for_url
 from ..base import Platform, BaseParser, PlatformEnum, handle, pconfig
 from ..cookie import save_cookies_with_netscape
 from ...download import yt_dlp_downloader
@@ -44,12 +46,26 @@ class YouTubeParser(BaseParser):
     async def parse_video(self, url: str):
         cookie_file = self.cookie_file
         video_info = await yt_dlp_downloader.extract_video_info(url, cookie_file)
-        author = await self._fetch_author_info(video_info.channel_id)
+        try:
+            author = await self._fetch_author_info(video_info.channel_id)
+        except httpx.HTTPError as e:
+            logger.warning(f"YouTube channel lookup failed: {e}")
+            author = self.create_author(video_info.channel)
 
+        stats = {
+            key: value
+            for key, value in {
+                "view": video_info.view_count,
+                "like": video_info.like_count,
+                "comment": video_info.comment_count,
+            }.items()
+            if value is not None
+        }
         result = self.result(
             author=author,
             title=video_info.title,
             timestamp=video_info.timestamp,
+            extra={"stats": stats} if stats else {},
         )
 
         if video_info.duration <= pconfig.duration_maximum:
@@ -90,7 +106,11 @@ class YouTubeParser(BaseParser):
             "browseId": channel_id,
         }
 
-        async with AsyncClient(headers=self.headers, timeout=self.timeout) as client:
+        async with httpx.AsyncClient(
+            headers=self.headers,
+            proxy=get_http_proxy_for_url(url, pconfig.proxy),
+            timeout=self.timeout,
+        ) as client:
             response = await client.post(url, json=payload)
             response.raise_for_status()
 

@@ -152,7 +152,7 @@ function parseResult(value: unknown, depth = 0): ParserResult | null {
   }
 
   const stats = parseStats(result.stats);
-  if (result.stats !== undefined && stats === null) return null;
+  if (result.stats !== undefined && result.stats !== null && stats === null) return null;
 
   const url = result.url === null ? null : optionalSafeUrl(result, "url");
   if (url === null && result.url !== null) return null;

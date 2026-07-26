@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ChangeEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -21,6 +21,10 @@ import { MockChatData } from "./chat/types";
 import { MockEhData } from "./eh/types";
 import { MockImageSearchData } from "./imgsearch/types";
 import { MockParserData } from "./parser/types";
+import {
+  parseParserDebugPayload,
+  parserPreviewStorageKey,
+} from "./parser/preview-storage";
 
 type PageEntry = {
   href: string;
@@ -122,6 +126,30 @@ const GUIDE: { icon: ReactNode; lead: string; body: ReactNode }[] = [
 ];
 
 export default function Home() {
+  async function uploadParserPayload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const payload = await file.text();
+      const parsed = parseParserDebugPayload(JSON.parse(payload));
+      if (!parsed.data) {
+        console.log("[parser preview] Debug payload was rejected", {
+          file: file.name,
+          error: parsed.error,
+        });
+        event.target.value = "";
+        return;
+      }
+      const id = crypto.randomUUID();
+      sessionStorage.setItem(parserPreviewStorageKey(id), payload);
+      window.location.assign(`/parser?payload=${encodeURIComponent(id)}`);
+    } catch (error) {
+      console.log("[parser preview] Failed to upload JSON payload", error);
+      event.target.value = "";
+    }
+  }
+
   return (
     <PageShell ready="ready">
       <PageHeader
@@ -153,7 +181,11 @@ export default function Home() {
         </Card>
 
         {PAGES.map((page) => (
-          <PageCard key={page.href} page={page} />
+          <PageCard
+            key={page.href}
+            page={page}
+            onParserUpload={page.href === "/parser" ? uploadParserPayload : undefined}
+          />
         ))}
 
         <p className="pt-2 text-center text-[11px] text-zinc-400">
@@ -164,7 +196,13 @@ export default function Home() {
   );
 }
 
-function PageCard({ page }: { page: PageEntry }) {
+function PageCard({
+  page,
+  onParserUpload,
+}: {
+  page: PageEntry;
+  onParserUpload?: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
   const mockQueryHref = `${page.href}?data=${encodeURIComponent(
     encodeUrlData(page.mockPreview),
   )}`;
@@ -231,6 +269,17 @@ function PageCard({ page }: { page: PageEntry }) {
             带参数打开
             <Link2 size={14} />
           </Link>
+          {onParserUpload ? (
+            <label className="inline-flex h-9 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-black/[0.08] bg-white px-3.5 text-[13px] font-medium text-zinc-700 transition hover:bg-zinc-50 sm:flex-none">
+              上传 JSON
+              <input
+                className="sr-only"
+                type="file"
+                accept="application/json,.json"
+                onChange={onParserUpload}
+              />
+            </label>
+          ) : null}
           <Link
             href={page.href}
             target="_blank"
