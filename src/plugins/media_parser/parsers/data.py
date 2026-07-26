@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 from pathlib import Path
 from datetime import datetime
 from dataclasses import field, dataclass
@@ -101,6 +101,15 @@ class Author:
         return repr + ")"
 
 
+@dataclass(slots=True)
+class MusicMetadata:
+    """Structured metadata for a standalone music result."""
+
+    artist: str | None = None
+    album: str | None = None
+    duration: float | None = None
+
+
 @dataclass(repr=False, slots=True)
 class ParseResult:
     """完整的解析结果"""
@@ -117,6 +126,10 @@ class ParseResult:
     """发布时间戳, 秒"""
     url: str | None = None
     """来源链接"""
+    kind: Literal["post", "music"] = "post"
+    """截图卡片内容类型"""
+    music: MusicMetadata | None = None
+    """独立音乐内容的结构化元数据"""
 
     contents: list[MediaContent] = field(default_factory=list)
     """媒体内容"""
@@ -273,6 +286,8 @@ class ParseResultKwargs(TypedDict, total=False):
     graphics: list[str | ImageContent]
     timestamp: int | None
     url: str | None
+    kind: Literal["post", "music"]
+    music: MusicMetadata | None
     author: Author | None
     extra: dict[str, Any]
     repost: ParseResult | None

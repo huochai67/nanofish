@@ -13,7 +13,7 @@ from ..download import yt_dlp_downloader
 from ..exception import IgnoreException, ParseException
 from .base import BaseParser, Platform, PlatformEnum, handle, pconfig
 from .cookie import save_cookies_with_netscape
-from .data import Author, ParseResult
+from .data import Author, MusicMetadata, ParseResult
 from .utils import fmt_duration
 
 
@@ -69,21 +69,18 @@ class MusicParser(BaseParser, ABC):
             # Keep the card useful when the source does not expose a playable stream.
             contents.append(self.create_image(info.cover_url, alt=info.title))
 
-        details = []
-        if info.album:
-            details.append(f"专辑：{info.album}")
-        if info.duration is not None:
-            details.append(f"时长：{fmt_duration(info.duration)}")
-        if audio_notice:
-            details.append(audio_notice)
-
         return self.result(
             author=Author(name=info.artist) if info.artist else None,
             title=info.title,
-            text="\n".join(details) or None,
             url=url,
+            kind="music",
+            music=MusicMetadata(
+                artist=info.artist,
+                album=info.album,
+                duration=info.duration,
+            ),
             contents=contents,
-            extra={"content_type": "音乐"},
+            extra={"content_type": "音乐", "info": audio_notice},
         )
 
     async def _extract_track_info(self, url: str) -> TrackInfo:

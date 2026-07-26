@@ -64,10 +64,45 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
             "description": result.author.description,
         }
 
-    contents: list[dict[str, Any]] = []
+    data: dict[str, Any] = {
+        "kind": result.kind,
+        "platform": {
+            "name": result.platform.name,
+            "displayName": result.platform.display_name,
+        },
+        "author": author,
+        "timestamp": result.timestamp,
+        "url": result.url,
+        "contentType": result.content_type,
+        "extraInfo": result.extra_info,
+        "stats": result.extra.get("stats"),
+    }
+
+    if result.kind == "music":
+        audio = next(
+            (content for content in result.contents if isinstance(content, AudioContent)),
+            None,
+        )
+        image = next(
+            (content for content in result.contents if isinstance(content, ImageContent)),
+            None,
+        )
+        metadata = result.music
+        data.update(
+            {
+                "title": result.title or "未知曲目",
+                "artist": metadata.artist if metadata else result.author.name if result.author else None,
+                "album": metadata.album if metadata else None,
+                "cover": await _image_data(audio.cover if audio else image.path_task if image else None),
+                "duration": metadata.duration if metadata else audio.duration if audio else None,
+            }
+        )
+        return data
+
+    media: list[dict[str, Any]] = []
     for content in result.contents:
         if isinstance(content, ImageContent):
-            contents.append(
+            media.append(
                 {
                     "kind": "image",
                     "src": await _image_data(content.path_task),
@@ -75,20 +110,12 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
                 }
             )
         elif isinstance(content, VideoContent):
-            contents.append(
+            media.append(
                 {
                     "kind": "video",
                     "poster": await _image_data(content.cover),
                     "duration": content.duration,
                     "isGif": content.is_gif,
-                }
-            )
-        elif isinstance(content, AudioContent):
-            contents.append(
-                {
-                    "kind": "audio",
-                    "duration": content.duration,
-                    "cover": await _image_data(content.cover),
                 }
             )
 
@@ -105,23 +132,19 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
                 }
             )
 
-    return {
-        "platform": {
-            "name": result.platform.name,
-            "displayName": result.platform.display_name,
-        },
-        "author": author,
-        "title": result.title,
-        "text": result.text,
-        "timestamp": result.timestamp,
-        "url": result.url,
-        "contentType": result.content_type,
-        "contents": contents,
-        "graphics": graphics,
-        "extraInfo": result.extra_info,
-        "stats": result.extra.get("stats"),
-        "repost": await _result_data(result.repost) if result.repost else None,
-    }
+    if result.repost is not None and result.repost.kind != "post":
+        raise ValueError("Only post results can be rendered as reposts")
+
+    data.update(
+        {
+            "title": result.title,
+            "text": result.text,
+            "media": media,
+            "graphics": graphics,
+            "repost": await _result_data(result.repost) if result.repost else None,
+        }
+    )
+    return data
 
 
 async def _render_card(result: ParseResult) -> bytes:
