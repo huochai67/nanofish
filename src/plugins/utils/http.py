@@ -1,11 +1,16 @@
-import os
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 from nonebot import get_plugin_config, logger
 
-from src.proxy import get_http_proxy_from_env
+from src.proxy import (
+    configure_proxy_environment as _configure_proxy_environment,
+)
+from src.proxy import (
+    get_http_proxy_for_url,
+    get_http_proxy_from_env,
+)
 
 from .config import Config
 
@@ -106,27 +111,31 @@ def get_http_proxy() -> str | None:
 
 def configure_proxy_environment() -> None:
     """Expose the configured proxy to SDKs that create their own HTTP clients."""
-    proxy = get_http_proxy()
-    if not proxy:
-        return
-    for name in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
-        os.environ[name] = proxy
+    _configure_proxy_environment()
 
 
 def http_client(
     *,
+    url: str | None = None,
     proxy: str | None = None,
     timeout: float | None = None,
     **kwargs: Any,
 ) -> httpx.AsyncClient:
     """创建带全局默认 timeout / proxy 的 AsyncClient。
 
-    ``proxy`` 为 None 时回退到全局 ``PROXY`` / ``HTTP_PROXY`` 配置；
+    ``proxy`` 为 None 时回退到全局 ``PROXY`` / ``HTTP_PROXY`` 配置；传入
+    ``url`` 时会遵循 ``NO_PROXY``。
     ``timeout`` 为 None 时回退到 ``http_timeout`` 配置。
     """
     cfg = _config()
     return httpx.AsyncClient(
-        proxy=get_http_proxy() if proxy is None else proxy,
+        proxy=(
+            get_http_proxy_for_url(url, proxy)
+            if url
+            else get_http_proxy()
+            if proxy is None
+            else proxy
+        ),
         timeout=cfg.http_timeout if timeout is None else timeout,
         **kwargs,
     )
@@ -170,7 +179,9 @@ async def http_get(
     **kwargs: Any,
 ) -> httpx.Response:
     try:
-        async with http_client(proxy=proxy, timeout=timeout, **kwargs) as client:
+        async with http_client(
+            url=url, proxy=proxy, timeout=timeout, **kwargs
+        ) as client:
             response = await client.get(url, params=params)
             if _config().http_trace:
                 log_http_trace("httpx", response)
@@ -188,7 +199,7 @@ async def http_post(
     **kwargs: Any,
 ) -> httpx.Response:
     try:
-        async with http_client(proxy=proxy, timeout=timeout) as client:
+        async with http_client(url=url, proxy=proxy, timeout=timeout) as client:
             response = await client.post(url, **kwargs)
             if _config().http_trace:
                 log_http_trace("httpx", response)

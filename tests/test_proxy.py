@@ -4,7 +4,11 @@ from pydantic import BaseModel
 from pytest import MonkeyPatch
 
 from src import plugin_config
-from src.proxy import get_http_proxy_from_env
+from src.proxy import (
+    get_http_proxy_for_url,
+    get_http_proxy_from_env,
+    should_bypass_proxy,
+)
 
 
 class _PluginConfig(BaseModel):
@@ -43,3 +47,28 @@ def test_yaml_plugin_config_receives_environment_proxy(
         plugin_config._load_config.cache_clear()
 
     assert config.proxy == "http://sing-box:23333"
+
+
+def test_no_proxy_matches_standard_host_rules(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "NO_PROXY",
+        "example.com,.internal.test,127.0.0.1,10.0.0.0/8,api.test:8443",
+    )
+
+    assert should_bypass_proxy("https://example.com/path")
+    assert should_bypass_proxy("https://cdn.example.com/path")
+    assert should_bypass_proxy("https://api.internal.test/path")
+    assert should_bypass_proxy("http://127.0.0.1:3000")
+    assert should_bypass_proxy("http://10.2.3.4")
+    assert should_bypass_proxy("https://api.test:8443/path")
+    assert not should_bypass_proxy("https://api.test:443/path")
+    assert not should_bypass_proxy("https://not-example.com/path")
+
+
+def test_no_proxy_bypasses_explicit_proxy(monkeypatch: MonkeyPatch) -> None:
+    monkeypatch.setenv("PROXY", "http://proxy:7890")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.setenv("no_proxy", "localhost")
+
+    assert get_http_proxy_for_url("http://localhost:3000") is None
+    assert get_http_proxy_for_url("https://example.com") == "http://proxy:7890"

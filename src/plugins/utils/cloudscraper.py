@@ -7,8 +7,10 @@ from typing import Any
 import httpx
 from nonebot import get_plugin_config, logger
 
+from src.proxy import get_http_proxy_for_url
+
 from .config import Config
-from .http import HttpRequestError, get_http_proxy, http_error_message, log_http_trace
+from .http import HttpRequestError, http_error_message, log_http_trace
 
 
 class CloudScraperClient:
@@ -28,7 +30,7 @@ class CloudScraperClient:
             raise ValueError("cf_clearance must not be configured")
 
         resolved_config = config or get_plugin_config(Config)
-        self._proxy = get_http_proxy() if proxy is None else proxy
+        self._proxy = proxy
         self._timeout = resolved_config.http_timeout
         self._flaresolverr_url = resolved_config.flaresolverr_url.strip()
         self._debug_name = debug_name
@@ -45,6 +47,9 @@ class CloudScraperClient:
     def _solver_cookies(self) -> list[dict[str, str]]:
         return [{"name": name, "value": value} for name, value in self._cookies.items()]
 
+    def _proxy_for_url(self, url: str) -> str | None:
+        return get_http_proxy_for_url(url, self._proxy)
+
     async def _solve(  # noqa: C901, PLR0912  # HTTP client response parsing
         self,
         url: str,
@@ -56,8 +61,8 @@ class CloudScraperClient:
             "url": url,
             "maxTimeout": round(timeout * 1000),
         }
-        if self._proxy:
-            payload["proxy"] = {"url": self._proxy}
+        if proxy := self._proxy_for_url(url):
+            payload["proxy"] = {"url": proxy}
         if self._cookies:
             payload["cookies"] = self._solver_cookies()
 
@@ -152,6 +157,7 @@ class CloudScraperClient:
         **kwargs: Any,
     ) -> httpx.Response:
         request_timeout = self._timeout if timeout is None else timeout
+        proxy = self._proxy_for_url(url)
         params = kwargs.pop("params", None)
         headers = kwargs.pop("headers", None)
         request_url = str(httpx.URL(url, params=params))
@@ -173,7 +179,7 @@ class CloudScraperClient:
 
         try:
             async with httpx.AsyncClient(
-                proxy=self._proxy,
+                proxy=proxy,
                 timeout=request_timeout,
                 trust_env=False,
                 follow_redirects=True,
@@ -190,7 +196,7 @@ class CloudScraperClient:
             if self._flaresolverr_url and response.status_code in {403, 503}:
                 await self._ensure_solution(request_url, request_timeout, force=True)
                 async with httpx.AsyncClient(
-                    proxy=self._proxy,
+                    proxy=proxy,
                     timeout=request_timeout,
                     trust_env=False,
                     follow_redirects=True,

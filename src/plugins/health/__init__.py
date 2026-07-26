@@ -8,6 +8,7 @@ from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
 
 from src.plugin_config import get_yaml_plugin_config
+from src.proxy import get_http_proxy_for_url
 
 from .config import Config
 
@@ -92,9 +93,9 @@ async def check_frontend() -> CheckResult:
         return CheckResult("前端", Status.FAIL, "APP_API_BASE 未配置")
     try:
         async with httpx.AsyncClient(
+            proxy=get_http_proxy_for_url(base),
             timeout=config.health_http_timeout,
             follow_redirects=True,
-            trust_env=False,
         ) as http:
             response = await http.get(base)
         if get_globalconfig().http_trace:
@@ -152,9 +153,9 @@ async def check_eh_tags() -> CheckResult:
     url = f"{base}/ehtag-dict.json"
     try:
         async with httpx.AsyncClient(
+            proxy=get_http_proxy_for_url(url),
             timeout=config.health_http_timeout,
             follow_redirects=True,
-            trust_env=False,
         ) as http:
             response = await http.get(url)
         if get_globalconfig().http_trace:

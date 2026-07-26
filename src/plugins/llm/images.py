@@ -19,6 +19,7 @@ from nonebot.adapters.onebot.v11.message import Message
 from openai import APIStatusError, APITimeoutError, AsyncOpenAI, OpenAIError
 
 from src.plugin_config import get_yaml_plugin_config
+from src.proxy import get_http_proxy_for_url
 
 from .config import Config
 
@@ -28,7 +29,6 @@ if TYPE_CHECKING:
 require("utils")
 from ..utils import (
     HttpRequestError,
-    get_http_proxy,
     http_get,
     request_error_message,
 )
@@ -47,7 +47,7 @@ class ImageAPIError(Exception):
 
 
 def _client() -> AsyncOpenAI:
-    proxy = get_http_proxy()
+    proxy = get_http_proxy_for_url(config.openai_api_base)
     http_client = (
         httpx.AsyncClient(proxy=proxy, timeout=config.image_timeout) if proxy else None
     )

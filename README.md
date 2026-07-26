@@ -127,7 +127,8 @@ docker compose up -d --build
 | `sightengine_api_user` / `sightengine_api_secret` / `c2pa_*` | `config.yaml` 中的 AI 图检测凭证和内嵌 C2PA 校验限制 |
 | `eh_ipb_*` / `eh_sk` / `eh_igneous` | `config.yaml` 中的 ExHentai cookie |
 | `imgsearch_*` | `config.yaml` 中的反向搜图上游参数 |
-| `PROXY` | 可选代理，应用于全部后端外部请求（兼容读取 `HTTP_PROXY` / `HTTPS_PROXY`） |
+| `PROXY` | 可选代理，应用于后端外部请求及 Playwright 截图页面（兼容读取 `HTTP_PROXY` / `HTTPS_PROXY`） |
+| `NO_PROXY` | 代理排除列表（兼容 `no_proxy`）；支持域名、子域名、IP/CIDR、端口和 `*`，并传递给 Playwright |
 | `FLARESOLVERR_URL` | FlareSolverr API 地址；Compose 默认 `http://flaresolverr:8191/v1`，设为空可禁用 |
 
 标签中文翻译在 **Next 前端**完成（[EhTagTranslation](https://github.com/EhTagTranslation/Database)）。构建/开发时会下载字典到 `app/public/ehtag-dict.json`（不入库）；Bot 只传原始 `namespace:tag`。

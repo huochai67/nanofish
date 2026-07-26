@@ -14,6 +14,7 @@ from nonebot.plugin import PluginMetadata
 from openai import AsyncOpenAI, OpenAIError
 
 from src.plugin_config import get_yaml_plugin_config
+from src.proxy import get_http_proxy_for_url
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
@@ -25,7 +26,6 @@ from ..acl import check_quota, consume_quota, require_command
 from ..app import app_chat_image_cq
 from ..utils import (
     finish_processing_reply,
-    get_http_proxy,
     get_image_urls,
     get_plaintext,
     get_reply,
@@ -181,7 +181,7 @@ async def openai(
     model: str,
     message: list[dict[str, Any]],
 ) -> dict[str, Any]:
-    proxy = get_http_proxy()
+    proxy = get_http_proxy_for_url(config.openai_api_base)
     http_client = httpx.AsyncClient(proxy=proxy) if proxy else None
     async with AsyncOpenAI(
         api_key=config.openai_api_key,

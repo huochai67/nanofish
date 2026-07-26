@@ -11,6 +11,8 @@ from nonebot.adapters.onebot.v11.message import Message
 from nonebot.plugin import PluginMetadata
 from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
+from src.proxy import get_http_proxy_from_env, get_no_proxy_from_env
+
 from .config import Config
 
 __plugin_meta__ = PluginMetadata(
@@ -83,7 +85,12 @@ class Client:
 
             await self._close_unlocked()
             playwright = await async_playwright().start()
-            browser = await playwright.chromium.launch()
+            proxy = get_http_proxy_from_env()
+            browser = await playwright.chromium.launch(
+                proxy={"server": proxy, "bypass": get_no_proxy_from_env() or ""}
+                if proxy
+                else None,
+            )
             context = await browser.new_context(
                 viewport={
                     "width": config.app_viewport_width,
