@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import io
 import mimetypes
 import re
 import time
@@ -11,6 +12,7 @@ from nonebot.adapters.onebot.v11 import Bot, MessageEvent
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.exception import FinishedException
 from nonebot.plugin import PluginMetadata
+from PIL import Image, ImageOps
 
 from src.plugin_config import get_yaml_plugin_config
 
@@ -86,6 +88,31 @@ def _image_filename(content_type: str) -> str:
     return f"image{extension}"
 
 
+def _preview_data_url(image: bytes) -> str:
+    """Create a compact preview for the screenshot without changing search input."""
+    try:
+        with Image.open(io.BytesIO(image)) as source:
+            if source.width * source.height > _PREVIEW_MAX_PIXELS:
+                logger.warning("imgsearch preview skipped: image has too many pixels")
+                return ""
+            preview = ImageOps.exif_transpose(source)
+            preview.thumbnail((_PREVIEW_MAX_SIDE, _PREVIEW_MAX_SIDE))
+            if preview.mode != "RGB":
+                background = Image.new("RGB", preview.size, "white")
+                if preview.mode == "RGBA":
+                    background.paste(preview, mask=preview.getchannel("A"))
+                else:
+                    background.paste(preview.convert("RGB"))
+                preview = background
+            output = io.BytesIO()
+            preview.save(output, format="JPEG", quality=82, optimize=True)
+    except (OSError, ValueError) as e:
+        logger.warning("imgsearch preview generation failed: {}", e)
+        return ""
+    encoded = base64.b64encode(output.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
+
+
 def _soutubot_api_key(m: int, user_agent: str) -> str:
     timestamp = int(time.time())
     value = timestamp**2 + len(user_agent) ** 2 + m
@@ -103,6 +130,9 @@ _SOUTUBOT_USER_AGENT = (
 )
 _HTTP_UNAUTHORIZED = 401
 _HTTP_FORBIDDEN = 403
+_PREVIEW_MAX_SIDE = 384
+_PREVIEW_MAX_PIXELS = 64_000_000
+
 
 def _soutubot_result_url(data: dict[str, Any]) -> str:
     direct_url = _first_text(data, "url", "source_url", "link", "ext_urls")
@@ -371,13 +401,11 @@ def _format_results(results: list[SearchResult], errors: list[str]) -> str:
 
 def _build_payload(
     image: bytes,
-    content_type: str,
     results: list[SearchResult],
     errors: list[str],
 ) -> dict[str, Any]:
-    encoded_image = base64.b64encode(image).decode("ascii")
     return {
-        "image": f"data:{content_type};base64,{encoded_image}",
+        "image": _preview_data_url(image),
         "results": [
             {
                 "source": result.source,
@@ -432,7 +460,7 @@ async def handle_imgsearch(bot: Bot, event: MessageEvent) -> None:
             return
         try:
             result_image = await app_imgsearch_image_cq(
-                _build_payload(image, content_type, results, errors)
+                _build_payload(image, results, errors)
             )
         except FinishedException:
             raise

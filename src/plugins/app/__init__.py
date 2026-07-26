@@ -21,6 +21,7 @@ __plugin_meta__ = PluginMetadata(
 )
 
 config: Config = get_plugin_config(Config)
+_MAX_FRONTEND_DIAGNOSTICS = 20
 
 
 def _payload_summary(value: Any) -> Any:
@@ -136,6 +137,7 @@ class Client:
     ) -> bytes:
         context = await self.get_context()
         page = await context.new_page()
+        diagnostics: list[str] = []
         try:
             if config.app_debug_frontend_payload:
                 await _dump_frontend_payload(path, global_name, data)
@@ -146,6 +148,27 @@ class Client:
                         "height": config.app_viewport_height,
                     }
                 )
+
+            def add_diagnostic(message: str) -> None:
+                if len(diagnostics) < _MAX_FRONTEND_DIAGNOSTICS:
+                    diagnostics.append(message[:1_000])
+
+            page.on(
+                "console",
+                lambda message: (
+                    add_diagnostic(f"console {message.type}: {message.text}")
+                    if message.type in {"error", "warning"}
+                    else None
+                ),
+            )
+            page.on("pageerror", lambda error: add_diagnostic(f"pageerror: {error}"))
+            page.on(
+                "requestfailed",
+                lambda request: add_diagnostic(
+                    f"requestfailed: {request.url.split('?', maxsplit=1)[0]} "
+                    f"({request.failure})"
+                ),
+            )
             # inject before any page JS so React reads data on first mount
             await page.add_init_script(
                 f"window.{global_name} = {json.dumps(data, ensure_ascii=False)};"
@@ -161,7 +184,9 @@ class Client:
                 timeout=config.app_page_timeout_ms,
             )
             if await readiness.get_attribute("data-ready") == "timeout":
-                raise RuntimeError("截图页面的远程媒体在 10 秒内未完成加载")
+                raise RuntimeError(  # noqa: TRY301
+                    "截图页面的远程媒体在 10 秒内未完成加载"
+                )
             await page.evaluate("() => document.fonts.ready")
             # Hide Next.js dev tools / portals that may still paint in screenshots
             await page.add_style_tag(
@@ -177,9 +202,25 @@ class Client:
             )
             if target_selector is not None:
                 target = page.locator(target_selector)
-                await target.wait_for(state="visible", timeout=config.app_page_timeout_ms)
+                await target.wait_for(
+                    state="visible", timeout=config.app_page_timeout_ms
+                )
                 return await target.screenshot(type=image_type)
             return await page.screenshot(type=image_type, full_page=True)
+        except Exception:
+            try:
+                states = await page.locator("[data-ready]").evaluate_all(
+                    "elements => elements.map(element => element.dataset.ready)"
+                )
+            except Exception as diagnostics_error:  # noqa: BLE001
+                states = [f"unavailable: {diagnostics_error}"]
+            logger.error(
+                "frontend screenshot failed path={} readiness={} diagnostics={}",
+                path,
+                states,
+                diagnostics,
+            )
+            raise
         finally:
             await page.close()
 
