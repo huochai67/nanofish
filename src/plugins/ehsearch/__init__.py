@@ -107,6 +107,14 @@ async def build_eh_payload(query: str, results: list[EhMetaData]) -> dict[str, A
     return {"query": query, "results": items}
 
 
+def format_results(results: list[EhMetaData]) -> str:
+    lines = ["EH 搜索结果"]
+    for index, result in enumerate(results, start=1):
+        lines.append(f"{index}. [{result.category}] {result.title}")
+        lines.append(result.url())
+    return "\n".join(lines)
+
+
 @ehsearch.handle()
 async def handle_function(
     bot: Bot,
@@ -140,7 +148,13 @@ async def handle_function(
             return
 
         payload = await build_eh_payload(search, result)
-        image = await app_eh_image_cq(payload)
+        try:
+            image = await app_eh_image_cq(payload)
+        except FinishedException:
+            raise
+        except Exception:  # noqa: BLE001
+            logger.exception("ehsearch result page screenshot failed")
+            image = format_results(result)
         await finish_processing_reply(ehsearch, processing, event, image)
     except FinishedException:
         raise
