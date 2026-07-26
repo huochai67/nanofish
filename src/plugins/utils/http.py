@@ -5,6 +5,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 import httpx
 from nonebot import get_plugin_config, logger
 
+from src.proxy import get_http_proxy_from_env
+
 from .config import Config
 
 _SENSITIVE_HEADERS = {"authorization", "cookie", "proxy-authorization", "x-api-key"}
@@ -99,7 +101,7 @@ def _config() -> Config:
 
 def get_http_proxy() -> str | None:
     """Return the shared proxy configured through any supported environment name."""
-    return _config().proxy
+    return get_http_proxy_from_env()
 
 
 def configure_proxy_environment() -> None:
@@ -153,7 +155,9 @@ def http_error_message(exc: httpx.HTTPError) -> str:
 
 
 def _map_httpx_error(exc: httpx.HTTPError) -> HttpRequestError:
-    status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+    status = (
+        exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+    )
     return HttpRequestError(http_error_message(exc), status=status)
 
 

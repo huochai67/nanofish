@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import TypeVar
 
 import yaml
-from nonebot import get_driver
 from pydantic import BaseModel
+
+from src.proxy import get_http_proxy_from_env
 
 _CONFIG_PATH = Path("config.yaml")
 ConfigModel = TypeVar("ConfigModel", bound=BaseModel)
@@ -41,5 +42,5 @@ def get_yaml_plugin_config(model: type[ConfigModel], plugin: str) -> ConfigModel
         raise RuntimeError(msg)
     values = raw.copy()
     if "proxy" in model.model_fields:
-        values["proxy"] = getattr(get_driver().config, "proxy", None)
+        values["proxy"] = get_http_proxy_from_env()
     return model.model_validate(values)
