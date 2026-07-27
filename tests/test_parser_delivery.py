@@ -168,6 +168,13 @@ def test_delivery_normalizes_bilibili_image_urls_to_https() -> None:
     assert _normalize_image_url("http://example.com/cover.jpg") is None
 
 
+def test_delivery_normalizes_xiaohongshu_image_urls_to_https() -> None:
+    assert (
+        _normalize_image_url("http://sns-webpic-qc.xhscdn.com/notes/image.jpg")
+        == "https://sns-webpic-qc.xhscdn.com/notes/image.jpg"
+    )
+
+
 def test_delivery_always_appends_urls_to_rendered_reply(
     monkeypatch: MonkeyPatch,
 ) -> None:

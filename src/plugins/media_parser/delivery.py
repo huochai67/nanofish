@@ -25,7 +25,11 @@ def _normalize_image_url(source_url: str) -> str | None:
     parsed = urlsplit(source_url)
     if parsed.scheme == "https":
         return source_url
-    if parsed.scheme == "http" and parsed.hostname and parsed.hostname.endswith(".hdslb.com"):
+    if (
+        parsed.scheme == "http"
+        and parsed.hostname
+        and parsed.hostname.endswith((".hdslb.com", ".xhscdn.com"))
+    ):
         return urlunsplit(parsed._replace(scheme="https"))
     return None
 
