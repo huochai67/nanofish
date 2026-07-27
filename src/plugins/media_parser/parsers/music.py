@@ -129,7 +129,7 @@ class MusicParser(BaseParser, ABC):
     async def _get_json(self, url: str, **kwargs: Any) -> Any | None:
         try:
             async with AsyncClient(
-                headers=self.headers, timeout=self.timeout
+                headers=self.headers, timeout=self.timeout, proxy=pconfig.proxy
             ) as client:
                 response = await client.get(url, follow_redirects=True, **kwargs)
                 response.raise_for_status()
@@ -146,6 +146,10 @@ class YouTubeMusicParser(MusicParser):
     cookie_config = "ytmusic_ck"
     cookie_domain = "music.youtube.com"
 
+    @property
+    def _cookie_value(self) -> str | None:
+        return pconfig.ytmusic_ck or pconfig.ytb_ck
+
     @handle(
         "music.youtube.com",
         r"music\.youtube\.com/watch\?(?:[^\s#]*&)?v=[A-Za-z0-9_-]+[^\s#]*",
@@ -153,8 +157,21 @@ class YouTubeMusicParser(MusicParser):
     async def _parse(self, searched: re.Match[str]) -> ParseResult:
         return await self.parse_track(f"https://{searched.group(0)}")
 
-    async def fetch_track_info(self, _url: str) -> TrackInfo | None:
-        return None
+    async def fetch_track_info(self, url: str) -> TrackInfo | None:
+        data = await self._get_json(
+            "https://www.youtube.com/oembed", params={"url": url, "format": "json"}
+        )
+        if not isinstance(data, dict) or not isinstance(data.get("title"), str):
+            return None
+        return TrackInfo(
+            title=data["title"],
+            artist=data.get("author_name")
+            if isinstance(data.get("author_name"), str)
+            else None,
+            cover_url=data.get("thumbnail_url")
+            if isinstance(data.get("thumbnail_url"), str)
+            else None,
+        )
 
 
 class SpotifyParser(MusicParser):
@@ -261,27 +278,54 @@ class QQMusicParser(MusicParser):
     )
     @handle(
         "y.qq.com",
+        r"y\.qq\.com/n/ryqq_v2/songDetail/(?P<id>\d+)[^\s#]*",
+    )
+    @handle(
+        "y.qq.com",
         r"y\.qq\.com/x/portal/player\.html\?(?:[^\s#]*&)?songmid=(?P<id>[A-Za-z0-9]+)[^\s#]*",
     )
     @handle(
         "i.y.qq.com",
         r"i\.y\.qq\.com/v8/playsong\.html\?(?:[^\s#]*&)?songmid=(?P<id>[A-Za-z0-9]+)[^\s#]*",
     )
+    @handle(
+        "i.y.qq.com",
+        r"i\.y\.qq\.com/v8/playsong\.html\?(?:[^\s#]*&)?songid=(?P<id>\d+)[^\s#]*",
+    )
     async def _parse(self, searched: re.Match[str]) -> ParseResult:
-        song_mid = searched.group("id")
-        url = f"https://y.qq.com/n/ryqq/songDetail/{song_mid}"
-        return await self.parse_track(url, await self._fetch_song(song_mid))
+        song_id = searched.group("id")
+        if "songid=" in searched.group(0) or "ryqq_v2" in searched.group(0):
+            url = f"https://y.qq.com/n/ryqq_v2/songDetail/{song_id}"
+            info = await self._fetch_song(song_id=int(song_id))
+        else:
+            url = f"https://y.qq.com/n/ryqq/songDetail/{song_id}"
+            info = await self._fetch_song(song_mid=song_id)
+        return await self.parse_track(url, info)
 
     async def fetch_track_info(self, url: str) -> TrackInfo | None:
-        matched = re.search(r"(?:songDetail/|songmid=)([A-Za-z0-9]+)", url)
-        return await self._fetch_song(matched.group(1)) if matched else None
+        if matched := re.search(r"(?:songid=|ryqq_v2/songDetail/)(\d+)", url):
+            return await self._fetch_song(song_id=int(matched.group(1)))
+        if matched := re.search(r"(?:songDetail/|songmid=)([A-Za-z0-9]+)", url):
+            return await self._fetch_song(song_mid=matched.group(1))
+        return None
 
-    async def _fetch_song(self, song_mid: str) -> TrackInfo | None:
+    async def _fetch_song(
+        self,
+        song_mid: str | None = None,
+        song_id: int | None = None,
+    ) -> TrackInfo | None:
+        param: dict[str, int | str] = {"song_type": 0}
+        if song_id is not None:
+            param["song_id"] = song_id
+        elif song_mid:
+            param["song_mid"] = song_mid
+        else:
+            return None
         payload = {
             "req_0": {
                 "module": "music.pf_song_detail_svr",
                 "method": "get_song_detail_yqq",
-                "param": {"song_mid": song_mid, "song_type": 0},
+                "param": param,
             }
         }
         data = await self._get_json(
@@ -298,6 +342,9 @@ class QQMusicParser(MusicParser):
         )
         if not isinstance(track, dict):
             return None
+        title = track.get("name")
+        if not isinstance(title, str) or not title:
+            return None
         singers_data = track.get("singer")
         singers = singers_data if isinstance(singers_data, list) else []
         singer_names = [
@@ -313,9 +360,8 @@ class QQMusicParser(MusicParser):
             if isinstance(album_mid, str) and album_mid
             else None
         )
-        title = track.get("name")
         return TrackInfo(
-            title=title if isinstance(title, str) else "未知歌曲",
+            title=title,
             artist=" / ".join(singer_names) or None,
             album=album.get("name") if isinstance(album.get("name"), str) else None,
             duration=track.get("interval")
