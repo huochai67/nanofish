@@ -42,6 +42,8 @@ class VxTwitterResponse(Struct):
     user_name: str
     user_screen_name: str
     user_profile_image_url: str
+    replies: int | None = None
+    retweets: int | None = None
     qrt: "VxTwitterResponse | None" = None
     qrtURL: str | None = None
     media_extended: list[MediaElement] = field(default_factory=list)
@@ -76,12 +78,22 @@ class TwitterParser(BaseParser):
     def _collect_result(self, data: VxTwitterResponse) -> ParseResult:
         author = self.create_author(data.user_name, data.user_profile_image_url)
         title = data.article.title if isinstance(data.article, Article) else data.article
+        stats = {
+            key: value
+            for key, value in {
+                "reply": data.replies,
+                "share": data.retweets,
+                "like": data.likes,
+            }.items()
+            if value is not None
+        }
 
         result = self.result(
             author=author,
             title=title,
             text=data.text,
             timestamp=data.date_epoch,
+            extra={"stats": stats} if stats else {},
         )
 
         for media in data.media_extended:
