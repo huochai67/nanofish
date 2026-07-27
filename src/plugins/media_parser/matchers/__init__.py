@@ -65,7 +65,7 @@ def clear_result_cache() -> None:
     _RESULT_CACHE.clear()
 
 
-@UniHelper.with_reaction
+@UniHelper.with_processing_reply
 async def parser_handler(
     sr: SearchResult = Searched(),
 ) -> None:
@@ -94,7 +94,7 @@ async def parser_handler(
 
 
 @on_command("bm", priority=3, block=True).handle()
-@UniHelper.with_reaction
+@UniHelper.with_processing_reply
 async def _(message: Message = CommandArg()):
     text = message.extract_plain_text()
     matched = re.search(r"(BV[A-Za-z0-9]{10})(\s\d{1,3})?", text)
@@ -129,7 +129,7 @@ if yt_dlp_downloader is not None:
     from ..parsers import YouTubeParser
 
     @on_command("ym", priority=3, block=True).handle()
-    @UniHelper.with_reaction
+    @UniHelper.with_processing_reply
     async def _(message: Message = CommandArg()):
         text = message.extract_plain_text()
         parser = get_parser_by_type(YouTubeParser)

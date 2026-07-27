@@ -1,12 +1,12 @@
 from collections.abc import Awaitable, Callable, Sequence
 from functools import wraps
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from nonebot import logger
-from nonebot.adapters import Event
 from nonebot.matcher import current_bot, current_event
-from nonebot_plugin_alconna import SupportAdapter, uniseg
+from nonebot.exception import FinishedException
+from nonebot_plugin_alconna import uniseg
 from nonebot_plugin_alconna.uniseg import (
     CustomNode,
     File,
@@ -24,20 +24,6 @@ from .exception import TipException
 
 ForwardNodeInner = str | Segment | UniMessage
 """转发消息节点内部允许的类型"""
-
-EMOJI_MAP = {
-    "fail": ("10060", "❌"),
-    "resolving": ("424", "👀"),
-    "done": ("144", "🎉"),
-}
-"""emoji 映射"""
-
-ID_ADAPTERS = {
-    SupportAdapter.onebot11,
-    SupportAdapter.qq,
-    SupportAdapter.milky,
-}
-"""支持的传入 emoji id 发送 reaction 的适配器"""
 
 
 class UniHelper:
@@ -131,44 +117,28 @@ class UniHelper:
             return File(path=file, name=display_name)
 
     @classmethod
-    async def message_reaction(
-        cls,
-        event: Event,
-        status: Literal["fail", "resolving", "done"],
-    ) -> None:
-        """发送消息回应"""
-        message_id = uniseg.get_message_id(event)
-        target = uniseg.get_target(event)
-
-        emoji = EMOJI_MAP[status][0 if target.adapter in ID_ADAPTERS else 1]
-
-        try:
-            await uniseg.message_reaction(emoji, message_id=message_id)
-        except Exception:
-            logger.opt(exception=True).warning(
-                f"reaction {emoji} to {message_id} failed, maybe not support"
-            )
-
-    @classmethod
-    def with_reaction(cls, func: Callable[..., Awaitable[Any]]):
-        """自动回应装饰器"""
+    def with_processing_reply(cls, func: Callable[..., Awaitable[Any]]):
+        """Reply with a temporary processing message and retract it after handling."""
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            event = current_event.get()
-            await cls.message_reaction(event, "resolving")
+            processing = await cls.reply_to_current_event("正在解析，请稍候…").send()
 
             try:
-                result = await func(*args, **kwargs)
+                return await func(*args, **kwargs)
             except TipException as e:
                 await cls.reply_to_current_event(e.message).send()
-                await cls.message_reaction(event, "fail")
                 return None
-            except Exception:
-                await cls.message_reaction(event, "fail")
+            except FinishedException:
                 raise
-
-            await cls.message_reaction(event, "done")
-            return result
+            except Exception:
+                logger.exception("media parser handling failed")
+                await cls.reply_to_current_event("解析失败，请稍后重试").send()
+                return None
+            finally:
+                try:
+                    await processing.recall()
+                except Exception:  # noqa: BLE001
+                    logger.exception("failed to retract parser processing reply")
 
         return wrapper
