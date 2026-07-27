@@ -65,6 +65,20 @@ class OpusSummary(Struct):
     # rich_text_nodes: list[dict[str, Any]]
 
 
+class StatCount(Struct):
+    """动态单项统计"""
+
+    count: int
+
+
+class DynamicStat(Struct):
+    """动态统计"""
+
+    comment: StatCount | None = None
+    forward: StatCount | None = None
+    like: StatCount | None = None
+
+
 class OpusContent(Struct):
     """图文动态内容"""
 
@@ -132,7 +146,7 @@ class DynamicModule(Struct):
 
     module_author: AuthorInfo
     module_dynamic: dict[str, Any] | None = None
-    module_stat: dict[str, Any] | None = None
+    module_stat: DynamicStat | None = None
 
     _cached_major: DynamicMajor | None = None
 
@@ -227,6 +241,22 @@ class DynamicInfo(Struct):
         if major := self.modules.major:
             return major.image_urls
         return []
+
+    @property
+    def stats(self) -> dict[str, int]:
+        """获取动态统计数据"""
+        stat = self.modules.module_stat
+        if stat is None:
+            return {}
+
+        def count(value: StatCount | None) -> int:
+            return value.count if value is not None else 0
+
+        return {
+            "share": count(stat.forward),
+            "reply": count(stat.comment),
+            "like": count(stat.like),
+        }
 
     def is_video(self) -> bool:
         """判断是否为视频动态"""

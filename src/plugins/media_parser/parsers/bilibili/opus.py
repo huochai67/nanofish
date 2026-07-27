@@ -52,14 +52,20 @@ class Content(Struct):
     paragraphs: list[Paragraph]
 
 
+class StatCount(Struct):
+    """图文动态单项统计"""
+
+    count: int
+
+
 class Stat(Struct):
     """图文动态统计"""
 
-    like: dict[str, Any] | None = None
-    comment: dict[str, Any] | None = None
-    forward: dict[str, Any] | None = None
-    favorite: dict[str, Any] | None = None
-    coin: dict[str, Any] | None = None
+    like: StatCount | None = None
+    comment: StatCount | None = None
+    forward: StatCount | None = None
+    favorite: StatCount | None = None
+    coin: StatCount | None = None
 
 
 class Module(Struct):
@@ -68,7 +74,7 @@ class Module(Struct):
     module_type: str
     module_author: Author | None = None
     module_content: Content | None = None
-    # module_stat: OpusStat | None = None
+    module_stat: Stat | None = None
 
 
 class Basic(Struct):
@@ -117,6 +123,27 @@ class OpusItem(Struct):
             if module.module_type == "MODULE_TYPE_AUTHOR" and module.module_author:
                 return int(module.module_author.pub_ts)
         return None
+
+    @property
+    def stats(self) -> dict[str, int]:
+        """获取图文动态统计数据"""
+        stat_module = next(
+            (module.module_stat for module in self.item.modules if module.module_stat),
+            None,
+        )
+        if stat_module is None:
+            return {}
+
+        def count(value: StatCount | None) -> int:
+            return value.count if value is not None else 0
+
+        return {
+            "share": count(stat_module.forward),
+            "reply": count(stat_module.comment),
+            "like": count(stat_module.like),
+            "coin": count(stat_module.coin),
+            "favorite": count(stat_module.favorite),
+        }
 
     def extract_nodes(self):
         """提取图文节点（保持顺序）"""

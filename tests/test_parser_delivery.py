@@ -13,6 +13,7 @@ def test_delivery_serializes_post_payload() -> None:
         platform=Platform("bilibili", "哔哩哔哩"),
         title="Post title",
         text="Post text",
+        extra={"stats": {"share": 1, "reply": 2, "like": 3}},
         repost=repost,
     )
 
@@ -24,6 +25,7 @@ def test_delivery_serializes_post_payload() -> None:
     assert data["media"] == []
     assert data["graphics"] == []
     assert data["repost"]["kind"] == "post"
+    assert data["stats"] == {"share": 1, "reply": 2, "like": 3}
     assert "contents" not in data
 
 

@@ -235,7 +235,10 @@ class BilibiliParser(BaseParser):
             author=author,
             contents=contents,
             repost=repost,
-            extra={"content_type": "动态"},
+            extra={
+                "content_type": "动态",
+                **({"stats": dynamic_info.stats} if dynamic_info.stats else {}),
+            },
         )
 
     async def parse_opus_by_id(self, opus_id: int):
@@ -262,6 +265,7 @@ class BilibiliParser(BaseParser):
             author=author,
             title=opus_data.title,
             timestamp=opus_data.timestamp,
+            extra={"stats": opus_data.stats} if opus_data.stats else {},
         )
 
         for node in opus_data.extract_nodes():
