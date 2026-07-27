@@ -36,6 +36,11 @@ def test_music_parsers_match_supported_track_urls() -> None:
         ),
         (
             QQMusicParser,
+            "https://y.qq.com/n/ryqq_v2/songDetail/002l7Fbe2KaBCU",
+            "y.qq.com",
+        ),
+        (
+            QQMusicParser,
             "https://i.y.qq.com/v8/playsong.html?songid=653936658#webchat_redirect",
             "i.y.qq.com",
         ),
@@ -45,6 +50,35 @@ def test_music_parsers_match_supported_track_urls() -> None:
         keyword, match = parser_class.search_url(url)
         assert keyword == expected_keyword
         assert match.group(0) in url
+
+
+def test_qq_music_v2_song_mid_uses_full_mid() -> None:
+    expected_song_mid = "002l7Fbe2KaBCU"
+    parser = QQMusicParser()
+    calls: list[tuple[str | None, int | None]] = []
+
+    async def fetch_song(
+        song_mid: str | None = None,
+        song_id: int | None = None,
+    ) -> object:
+        calls.append((song_mid, song_id))
+        return None
+
+    async def parse_track(url: str, info: object = None) -> object:
+        assert url == f"https://y.qq.com/n/ryqq/songDetail/{expected_song_mid}"
+        assert info is None
+        return None
+
+    parser._fetch_song = fetch_song  # type: ignore[method-assign]
+    parser.parse_track = parse_track  # type: ignore[method-assign]
+    keyword, match = parser.search_url(
+        f"https://y.qq.com/n/ryqq_v2/songDetail/{expected_song_mid}"
+    )
+
+    asyncio.run(parser.parse(keyword, match))
+
+    assert match.group("id") == expected_song_mid
+    assert calls == [(expected_song_mid, None)]
 
 
 def test_music_parser_base_is_not_registered_as_a_platform() -> None:

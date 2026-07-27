@@ -281,7 +281,7 @@ class QQMusicParser(MusicParser):
     )
     @handle(
         "y.qq.com",
-        r"y\.qq\.com/n/ryqq_v2/songDetail/(?P<id>\d+)[^\s#]*",
+        r"y\.qq\.com/n/ryqq_v2/songDetail/(?P<id>[A-Za-z0-9]+)[^\s#]*",
     )
     @handle(
         "y.qq.com",
@@ -297,7 +297,9 @@ class QQMusicParser(MusicParser):
     )
     async def _parse(self, searched: re.Match[str]) -> ParseResult:
         song_id = searched.group("id")
-        if "songid=" in searched.group(0) or "ryqq_v2" in searched.group(0):
+        if song_id.isdecimal() and (
+            "songid=" in searched.group(0) or "ryqq_v2" in searched.group(0)
+        ):
             url = f"https://y.qq.com/n/ryqq_v2/songDetail/{song_id}"
             info = await self._fetch_song(song_id=int(song_id))
         else:
