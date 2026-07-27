@@ -249,7 +249,7 @@ class Client:
             parser_data,
             image_type="png",
             viewport_width=720,
-            target_selector="[data-parser-card]",
+            target_selector="[data-parser-frame]",
         )
 
     async def close(self) -> None:

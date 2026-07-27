@@ -4,7 +4,7 @@ import { FileText, Heart, MessageCircle, Play, Send, Star } from "lucide-react";
 import { assetCount, GenericCard, type PlatformAppearance } from "./generic";
 import type { ParserPost, ParserResult, PostMedia } from "../types";
 
-export const appearance: PlatformAppearance = { label: "小红书", accent: "#ff2442", accentSoft: "#fff0f2", background: "linear-gradient(145deg, #fff1f3 0%, #fff 50%, #fff5f5 100%)", card: "#ffffff", logo: "/parser/xiaohongshu.png", Icon: FileText };
+export const appearance: PlatformAppearance = { label: "小红书", accent: "#ff2442", accentSoft: "#fff0f2", background: "#bebebe", card: "#ffffff", logo: "/parser/xiaohongshu.png", Icon: FileText };
 
 export function Xiaohongshu({ result, maxGridImages, onAsset }: { result: ParserResult; maxGridImages: number; onAsset: () => void }) {
   return result.kind === "music" ? <GenericCard result={result} appearance={appearance} maxGridImages={maxGridImages} onAsset={onAsset} /> : <XiaohongshuPost result={result} onAsset={onAsset} />;

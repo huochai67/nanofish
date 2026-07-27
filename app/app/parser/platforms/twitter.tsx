@@ -4,7 +4,7 @@ import { BadgeCheck, Bookmark, CircleUserRound, Ellipsis, Heart, MessageCircle, 
 import { assetCount, GenericCard, type PlatformAppearance } from "./generic";
 import type { ParserPost, ParserResult, PostMedia } from "../types";
 
-export const appearance: PlatformAppearance = { label: "X", accent: "#111827", accentSoft: "#edf1f5", background: "linear-gradient(145deg, #eef3f7 0%, #f8fafc 52%, #e9eef3 100%)", card: "#ffffff", logo: "/parser/twitter.png", Icon: MessageCircleMore };
+export const appearance: PlatformAppearance = { label: "X", accent: "#111827", accentSoft: "#edf1f5", background: "#ffffff", card: "#ffffff", logo: "/parser/twitter.png", Icon: MessageCircleMore };
 
 export function Twitter({ result, maxGridImages, onAsset }: { result: ParserResult; maxGridImages: number; onAsset: () => void }) {
   return result.kind === "music" ? <GenericCard result={result} appearance={appearance} maxGridImages={maxGridImages} onAsset={onAsset} /> : <TwitterPost result={result} maxGridImages={maxGridImages} onAsset={onAsset} />;
@@ -30,7 +30,7 @@ function TwitterPost({ result, maxGridImages, onAsset }: { result: ParserPost; m
   const actionItems = [{ Icon: MessageCircle, value: result.stats?.reply ?? result.stats?.comment }, { Icon: Repeat2, value: result.stats?.share }, { Icon: Heart, value: result.stats?.like }, { Icon: Bookmark, value: result.stats?.collect }];
 
   return (
-    <article data-parser-card className="bg-white px-4 py-3 text-[#0f1419] sm:px-5">
+    <article data-parser-card className="rounded-xl border border-[#cfd9de] bg-white px-4 py-3 text-[#0f1419] shadow-pop sm:px-5">
       <div className="flex gap-3">
         {result.author?.avatar ? <img src={result.author.avatar} alt="" className="h-10 w-10 shrink-0 rounded object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-[#0f1419] text-white"><CircleUserRound size={22} /></span>}
         <div className="min-w-0 flex-1">

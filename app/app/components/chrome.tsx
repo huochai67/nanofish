@@ -34,12 +34,14 @@ export function PageShell({
 export function Content({
   children,
   className,
+  flush = false,
 }: {
   children: ReactNode;
   className?: string;
+  flush?: boolean;
 }) {
   return (
-    <div className={clsx("mx-auto w-full max-w-[720px] px-4 sm:px-5", className)}>
+    <div className={clsx("mx-auto w-full max-w-[720px]", !flush && "px-4 sm:px-5", className)}>
       {children}
     </div>
   );

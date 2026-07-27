@@ -15,7 +15,7 @@ export const appearance: PlatformAppearance = {
   label: "YouTube",
   accent: "#ff0033",
   accentSoft: "#fff0f2",
-  background: "linear-gradient(145deg, #f6f6f6 0%, #fff 56%, #f3f3f3 100%)",
+  background: "#ffffff",
   card: "#ffffff",
   logo: "/parser/youtube.png",
   Icon: Play,

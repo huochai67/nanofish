@@ -18,7 +18,7 @@ export const appearance: PlatformAppearance = {
   label: "Bilibili",
   accent: "#00aeec",
   accentSoft: "#e0f7ff",
-  background: "linear-gradient(145deg, #eafaff 0%, #f7fcff 42%, #e9f7ff 100%)",
+  background: "#d9ebeb",
   card: "#ffffff",
   logo: "/parser/bilibili.png",
   Icon: Clapperboard,

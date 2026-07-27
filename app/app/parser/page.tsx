@@ -136,9 +136,11 @@ export default function ParserPage() {
   const Card = renderer.Card;
   return (
     <PageShell ready={status} style={{ background: renderer.appearance.background }} className="text-slate-900">
-      <Content className="space-y-4 py-4 sm:py-6">
-        {error ? <Notice>{error}</Notice> : null}
-        <Card result={data.result} maxGridImages={data.maxGridImages ?? 9} onAsset={completeAsset} />
+      <Content flush className="py-0">
+        <div data-parser-frame className="space-y-4 p-4 sm:p-5" style={{ background: renderer.appearance.background }}>
+          {error ? <Notice>{error}</Notice> : null}
+          <Card result={data.result} maxGridImages={data.maxGridImages ?? 9} onAsset={completeAsset} />
+        </div>
       </Content>
     </PageShell>
   );
