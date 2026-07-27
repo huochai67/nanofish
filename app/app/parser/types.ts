@@ -76,7 +76,7 @@ function parsePostMedia(value: unknown): PostMedia | null {
   if (!media || typeof kind !== "string") return null;
 
   if (kind === "image") {
-    const src = optionalSafeUrl(media, "src", true);
+    const src = optionalSafeUrl(media, "src");
     return src === null ? null : { kind, src, alt: optionalString(media, "alt") };
   }
   if (kind === "video") {
@@ -85,7 +85,7 @@ function parsePostMedia(value: unknown): PostMedia | null {
       return null;
     }
     if (media.isGif !== undefined && typeof media.isGif !== "boolean") return null;
-    const poster = optionalSafeUrl(media, "poster", true);
+    const poster = optionalSafeUrl(media, "poster");
     if (poster === null) return null;
     return {
       kind,
@@ -107,7 +107,7 @@ function parseGraphic(value: unknown): ParserGraphic | null {
     return text === undefined ? null : { kind, text };
   }
   if (kind === "image") {
-    const src = optionalSafeUrl(graphic, "src", true);
+    const src = optionalSafeUrl(graphic, "src");
     return src === null ? null : { kind, src, alt: optionalString(graphic, "alt") };
   }
   return null;
@@ -133,8 +133,8 @@ function parseAuthor(value: unknown): Author | null | undefined {
   const author = asRecord(value);
   const name = author ? optionalString(author, "name") : undefined;
   if (!author || name === undefined) return undefined;
-  const avatar = optionalSafeUrl(author, "avatar", true);
-  const pendant = optionalSafeUrl(author, "pendant", true);
+  const avatar = optionalSafeUrl(author, "avatar");
+  const pendant = optionalSafeUrl(author, "pendant");
   if (avatar === null || pendant === null) return undefined;
   return {
     name,
@@ -203,7 +203,7 @@ function parseMusic(value: Record<string, unknown>): ParserMusic | null {
   const base = parseBase(value);
   const title = optionalString(value, "title");
   if (!base || title === undefined) return null;
-  const cover = value.cover === null ? null : optionalSafeUrl(value, "cover", true);
+  const cover = value.cover === null ? null : optionalSafeUrl(value, "cover");
   if (cover === null && value.cover !== null) return null;
   const duration = optionalNullableNumber(value, "duration");
   if (duration !== undefined && duration !== null && duration < 0) return null;

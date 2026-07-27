@@ -290,12 +290,12 @@ class BilibiliParser(BaseParser):
         # 下载封面
         if cover := room_data.cover:
             cover_task = self.downloader.download_img(cover, ext_headers=self.headers)
-            contents.append(self.create_image(cover_task))
+            contents.append(self.create_image(cover_task, source_url=cover))
 
         # 下载关键帧
         if keyframe := room_data.keyframe:
             keyframe_task = self.downloader.download_img(keyframe, ext_headers=self.headers)
-            contents.append(self.create_image(keyframe_task))
+            contents.append(self.create_image(keyframe_task, source_url=keyframe))
 
         author = self.create_author(room_data.name, room_data.avatar)
 

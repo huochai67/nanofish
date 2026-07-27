@@ -9,17 +9,20 @@ from ..exception import ParseException
 
 
 class PathTask:
-    __slots__ = ("_path", "_task")
+    __slots__ = ("_path", "_task", "source_url")
 
     def __init__(
         self,
         task: Task[Path] | Coroutine[Any, Any, Path],
+        *,
+        source_url: str | None = None,
     ):
         if isinstance(task, Task):
             self._task: Task[Path] = task
         else:
             self._task = create_task(task, name=task.__name__)
         self._path: Path | None = None
+        self.source_url = source_url
 
     async def get(self) -> Path:
         if self._path is not None:

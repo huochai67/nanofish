@@ -175,9 +175,15 @@ class BaseParser:
         author = Author(name=name, description=description)
 
         if avatar_url:
-            author.avatar = PathTask(downloader.download_img(avatar_url, ext_headers=self.headers))
+            author.avatar = PathTask(
+                downloader.download_img(avatar_url, ext_headers=self.headers),
+                source_url=avatar_url,
+            )
         if pendant_url:
-            author.pendant = PathTask(downloader.download_img(pendant_url, ext_headers=self.headers))
+            author.pendant = PathTask(
+                downloader.download_img(pendant_url, ext_headers=self.headers),
+                source_url=pendant_url,
+            )
 
         return author
 
@@ -201,6 +207,7 @@ class BaseParser:
 
         if cover_url:
             cover_task = downloader.download_img(cover_url, ext_headers=self.headers)
+            video_content.cover = PathTask(cover_task, source_url=cover_url)
         else:
             # 如果没有封面 URL，尝试从视频中提取封面
             async def extract_cover():
@@ -208,8 +215,7 @@ class BaseParser:
                 return await extract_video_first_frame(video_path)
 
             cover_task = extract_cover()
-
-        video_content.cover = PathTask(cover_task)
+            video_content.cover = PathTask(cover_task)
 
         if is_gif:
             # 需要转换为 GIF
@@ -237,21 +243,23 @@ class BaseParser:
         contents: list[ImageContent] = []
         for url in image_urls:
             task = downloader.download_img(url, ext_headers=self.headers)
-            contents.append(ImageContent(PathTask(task)))
+            contents.append(ImageContent(PathTask(task, source_url=url)))
         return contents
 
     def create_image(
         self,
         url_or_task: str | Task[Path],
         alt: str | None = None,
+        source_url: str | None = None,
     ):
         """创建单个图片内容"""
         if isinstance(url_or_task, str):
             path_task = downloader.download_img(url_or_task, ext_headers=self.headers)
+            source_url = url_or_task
         elif isinstance(url_or_task, Task):
             path_task = url_or_task
 
-        return ImageContent(PathTask(path_task), alt=alt)
+        return ImageContent(PathTask(path_task, source_url=source_url), alt=alt)
 
     def create_audio(
         self,
@@ -267,7 +275,14 @@ class BaseParser:
         elif isinstance(url_or_task, Task):
             path_task = url_or_task
 
-        cover = PathTask(downloader.download_img(cover_url, ext_headers=self.headers)) if cover_url else None
+        cover = (
+            PathTask(
+                downloader.download_img(cover_url, ext_headers=self.headers),
+                source_url=cover_url,
+            )
+            if cover_url
+            else None
+        )
         return AudioContent(PathTask(path_task), duration, cover)
 
     @property

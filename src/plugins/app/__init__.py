@@ -5,6 +5,7 @@ import json
 import threading
 import uuid
 from typing import Any, ClassVar, Literal, Self
+from urllib.parse import urlsplit
 
 from nonebot import get_driver, get_plugin_config, logger
 from nonebot.adapters.onebot.v11.message import Message
@@ -24,6 +25,15 @@ __plugin_meta__ = PluginMetadata(
 
 config: Config = get_plugin_config(Config)
 _MAX_FRONTEND_DIAGNOSTICS = 20
+
+
+def _proxy_summary(proxy: str) -> str:
+    parsed = urlsplit(proxy)
+    try:
+        port = f":{parsed.port}" if parsed.port else ""
+    except ValueError:
+        return "invalid proxy URL"
+    return f"{parsed.scheme or 'http'}://{parsed.hostname or 'unknown'}{port}"
 
 
 def _payload_summary(value: Any) -> Any:
@@ -86,10 +96,17 @@ class Client:
             await self._close_unlocked()
             playwright = await async_playwright().start()
             proxy = get_http_proxy_from_env()
+            bypass = get_no_proxy_from_env() or ""
+            if proxy:
+                logger.info(
+                    "Playwright browser proxy enabled: {} (bypass: {})",
+                    _proxy_summary(proxy),
+                    bypass or "none",
+                )
+            else:
+                logger.info("Playwright browser proxy disabled")
             browser = await playwright.chromium.launch(
-                proxy={"server": proxy, "bypass": get_no_proxy_from_env() or ""}
-                if proxy
-                else None,
+                proxy={"server": proxy, "bypass": bypass} if proxy else None,
             )
             context = await browser.new_context(
                 viewport={
@@ -176,6 +193,15 @@ class Client:
                     f"({request.failure})"
                 ),
             )
+            page.on(
+                "response",
+                lambda response: add_diagnostic(
+                    f"image response {response.status}: "
+                    f"{response.url.split('?', maxsplit=1)[0]}"
+                )
+                if response.request.resource_type == "image" and response.status >= 400
+                else None,
+            )
             # inject before any page JS so React reads data on first mount
             await page.add_init_script(
                 f"window.{global_name} = {json.dumps(data, ensure_ascii=False)};"
@@ -195,6 +221,12 @@ class Client:
                     "截图页面的远程媒体在 10 秒内未完成加载"
                 )
             await page.evaluate("() => document.fonts.ready")
+            if config.app_debug_frontend_payload and diagnostics:
+                logger.warning(
+                    "frontend screenshot diagnostics path={} diagnostics={}",
+                    path,
+                    diagnostics,
+                )
             # Hide Next.js dev tools / portals that may still paint in screenshots
             await page.add_style_tag(
                 content=(

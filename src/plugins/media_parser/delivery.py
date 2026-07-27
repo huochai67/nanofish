@@ -1,13 +1,11 @@
-import base64
 import uuid
 from collections.abc import AsyncGenerator
-from io import BytesIO
 from itertools import chain
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import aiofiles
-from PIL import Image
 
 from ..app import app_parser_image
 from .config import pconfig
@@ -16,42 +14,26 @@ from .helper import ForwardNodeInner, UniHelper, UniMessage
 from .parsers import AudioContent, ImageContent, ParseResult, VideoContent
 from .parsers.task import PathTask
 
-_MAX_IMAGE_EDGE = 1600
 _MAX_GRID_IMAGES = 9
 _MAX_DIRECT_MEDIA = 4
 
 
-async def _image_data(task: PathTask | None) -> str | None:
-    if task is None:
-        return None
-    path = await task.safe_get()
-    if path is None or not path.is_file():
-        return None
-    return _encode_image(path)
+def _normalize_image_url(source_url: str) -> str | None:
+    if source_url.startswith("//"):
+        return f"https:{source_url}"
+
+    parsed = urlsplit(source_url)
+    if parsed.scheme == "https":
+        return source_url
+    if parsed.scheme == "http" and parsed.hostname and parsed.hostname.endswith(".hdslb.com"):
+        return urlunsplit(parsed._replace(scheme="https"))
+    return None
 
 
-def _encode_image(path: Path) -> str | None:
-    """Convert local parser assets into browser-safe, bounded data URLs."""
-    try:
-        with Image.open(path) as opened:
-            image = opened.copy()
-    except (OSError, ValueError):
-        return None
-
-    image.thumbnail((_MAX_IMAGE_EDGE, _MAX_IMAGE_EDGE))
-    has_alpha = image.mode in {"LA", "RGBA"} or "transparency" in image.info
-    image_format = "PNG" if has_alpha else "JPEG"
-    if image_format == "JPEG" and image.mode != "RGB":
-        image = image.convert("RGB")
-
-    output = BytesIO()
-    if image_format == "PNG":
-        image.save(output, format=image_format, optimize=True)
-    else:
-        image.save(output, format=image_format, quality=88, optimize=True)
-    mime = "image/png" if image_format == "PNG" else "image/jpeg"
-    encoded = base64.b64encode(output.getvalue()).decode("ascii")
-    return f"data:{mime};base64,{encoded}"
+def _image_url(task: PathTask | None) -> str | None:
+    """Return a remote image URL suitable for the frontend screenshot page."""
+    source_url = task.source_url if task is not None else None
+    return _normalize_image_url(source_url) if source_url else None
 
 
 async def _result_data(result: ParseResult) -> dict[str, Any]:
@@ -59,8 +41,8 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
     if result.author is not None:
         author = {
             "name": result.author.name,
-            "avatar": await _image_data(result.author.avatar),
-            "pendant": await _image_data(result.author.pendant),
+            "avatar": _image_url(result.author.avatar),
+            "pendant": _image_url(result.author.pendant),
             "description": result.author.description,
         }
 
@@ -93,7 +75,9 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
                 "title": result.title or "未知曲目",
                 "artist": metadata.artist if metadata else result.author.name if result.author else None,
                 "album": metadata.album if metadata else None,
-                "cover": await _image_data(audio.cover if audio else image.path_task if image else None),
+                "cover": _image_url(
+                    audio.cover if audio else image.path_task if image else None
+                ),
                 "duration": metadata.duration if metadata else audio.duration if audio else None,
             }
         )
@@ -105,7 +89,7 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
             media.append(
                 {
                     "kind": "image",
-                    "src": await _image_data(content.path_task),
+                    "src": _image_url(content.path_task),
                     "alt": content.alt,
                 }
             )
@@ -113,7 +97,7 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
             media.append(
                 {
                     "kind": "video",
-                    "poster": await _image_data(content.cover),
+                    "poster": _image_url(content.cover),
                     "duration": content.duration,
                     "isGif": content.is_gif,
                 }
@@ -127,7 +111,7 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
             graphics.append(
                 {
                     "kind": "image",
-                    "src": await _image_data(graphic.path_task),
+                    "src": _image_url(graphic.path_task),
                     "alt": graphic.alt,
                 }
             )
@@ -148,7 +132,6 @@ async def _result_data(result: ParseResult) -> dict[str, Any]:
 
 
 async def _render_card(result: ParseResult) -> bytes:
-    await result.ensure_downloads_complete(img_only=True)
     payload = {
         "result": await _result_data(result),
         "maxGridImages": _MAX_GRID_IMAGES,
