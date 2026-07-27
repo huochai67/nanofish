@@ -61,8 +61,6 @@ media_parser:
   # 单位分别为 MB 和秒。
   parser_max_size: 20
   parser_duration_maximum: 120
-  # 是否在解析结果中追加原始链接。
-  parser_append_url: true
   # 禁用的平台列表。核心部署默认关闭需境外网络或登录态的平台。
   parser_disabled_platforms: [youtube, tiktok, twitter, nga]
   # 是否以合并转发消息发送媒体内容。

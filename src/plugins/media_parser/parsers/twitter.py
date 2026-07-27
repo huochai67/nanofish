@@ -64,7 +64,7 @@ class TwitterParser(BaseParser):
         url = f"https://{searched.group(0)}"
         return await self.parse_by_vxapi(url)
 
-    async def parse_by_vxapi(self, url: str):
+    async def parse_by_vxapi(self, url: str) -> ParseResult:
         """使用 vxtwitter API 解析 Twitter 链接"""
 
         api_url = url.replace("x.com", "api.vxtwitter.com")
@@ -73,9 +73,13 @@ class TwitterParser(BaseParser):
             response.raise_for_status()
 
         data = decoder.decode(response.content)
-        return self._collect_result(data)
+        return self._collect_result(data, url)
 
-    def _collect_result(self, data: VxTwitterResponse) -> ParseResult:
+    def _collect_result(
+        self,
+        data: VxTwitterResponse,
+        url: str | None = None,
+    ) -> ParseResult:
         author = self.create_author(data.user_name, data.user_profile_image_url)
         title = data.article.title if isinstance(data.article, Article) else data.article
         stats = {
@@ -93,6 +97,7 @@ class TwitterParser(BaseParser):
             title=title,
             text=data.text,
             timestamp=data.date_epoch,
+            url=url,
             extra={"stats": stats} if stats else {},
         )
 
@@ -109,7 +114,7 @@ class TwitterParser(BaseParser):
                 result.contents.append(self.create_image(media.original_url))
 
         if data.qrt:
-            result.repost = self._collect_result(data.qrt)
+            result.repost = self._collect_result(data.qrt, data.qrtURL)
 
         return result
 

@@ -229,9 +229,8 @@ async def deliver_parse_result(
 ) -> AsyncGenerator[UniMessage[Any], None]:
     """Send the frontend-rendered card followed by parser media attachments."""
     message = UniMessage(await _card_segment(result))
-    if pconfig.append_url:
-        urls = (result.display_url, result.repost_display_url)
-        message += "\n".join(url for url in urls if url)
+    urls = (result.display_url, result.repost_display_url)
+    message += "\n".join(url for url in urls if url)
     yield message
 
     async for message in _media_messages(result):

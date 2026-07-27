@@ -1,6 +1,11 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from pathlib import Path
+from typing import Any
 
+from pytest import MonkeyPatch
+
+from src.plugins.media_parser import delivery
 from src.plugins.media_parser.delivery import _normalize_image_url, _result_data
 from src.plugins.media_parser.parsers.data import (
     AudioContent,
@@ -161,3 +166,31 @@ def test_delivery_normalizes_bilibili_image_urls_to_https() -> None:
         == "https://i0.hdslb.com/bfs/archive/cover.jpg"
     )
     assert _normalize_image_url("http://example.com/cover.jpg") is None
+
+
+def test_delivery_always_appends_urls_to_rendered_reply(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    async def card_segment(_result: ParseResult) -> str:
+        return "rendered card"
+
+    monkeypatch.setattr(delivery, "_card_segment", card_segment)
+    result = ParseResult(
+        platform=Platform("twitter", "X"),
+        url="https://x.com/example/status/1",
+        repost=ParseResult(
+            platform=Platform("twitter", "X"),
+            url="https://x.com/example/status/2",
+        ),
+    )
+
+    async def messages() -> AsyncGenerator[Any, None]:
+        async for message in delivery.deliver_parse_result(result):
+            yield message
+
+    delivered = asyncio.run(anext(messages()))
+
+    assert delivered.extract_plain_text() == (
+        "rendered card链接: https://x.com/example/status/1\n"
+        "原帖: https://x.com/example/status/2"
+    )
