@@ -1,16 +1,17 @@
 import asyncio
 from types import SimpleNamespace
+from typing import Self
 
 import httpx
 from pytest import MonkeyPatch
 
 from src.plugins.media_parser.download.ytdlp import VideoInfo
+from src.plugins.media_parser.parsers import youtube
 from src.plugins.media_parser.parsers.youtube import YouTubeParser
 from src.plugins.media_parser.parsers.youtube import meta as youtube_meta
-import src.plugins.media_parser.parsers.youtube as youtube
 
 
-def test_youtube_author_lookup_uses_parser_proxy(monkeypatch: MonkeyPatch) -> None:
+def test_youtube_author_lookup_uses_global_proxy(monkeypatch: MonkeyPatch) -> None:
     options: dict[str, object] = {}
 
     class Response:
@@ -23,7 +24,7 @@ def test_youtube_author_lookup_uses_parser_proxy(monkeypatch: MonkeyPatch) -> No
         def __init__(self, **kwargs: object) -> None:
             options.update(kwargs)
 
-        async def __aenter__(self):
+        async def __aenter__(self) -> Self:
             return self
 
         async def __aexit__(self, *_args: object) -> None:
@@ -33,7 +34,9 @@ def test_youtube_author_lookup_uses_parser_proxy(monkeypatch: MonkeyPatch) -> No
             return Response()
 
     monkeypatch.setattr(youtube.httpx, "AsyncClient", Client)
-    monkeypatch.setattr(youtube, "get_http_proxy_for_url", lambda *_args: "http://proxy:23333")
+    monkeypatch.setenv("PROXY", "http://proxy:23333")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    monkeypatch.delenv("no_proxy", raising=False)
     monkeypatch.setattr(
         youtube_meta,
         "decoder",

@@ -30,8 +30,6 @@ class Config(BaseModel):
     """网易云音乐 cookies"""
     parser_qq_music_ck: str | None = None
     """QQ 音乐 cookies"""
-    parser_proxy: str | None = None
-    """代理"""
     parser_need_upload: bool = False
     """是否需要上传音频文件"""
     parser_use_base64: bool = False
@@ -129,11 +127,6 @@ class Config(BaseModel):
     def qq_music_ck(self) -> str | None:
         """QQ 音乐 cookies"""
         return self.parser_qq_music_ck
-
-    @property
-    def proxy(self) -> str | None:
-        """代理"""
-        return self.parser_proxy
 
     @property
     def need_upload(self) -> bool:

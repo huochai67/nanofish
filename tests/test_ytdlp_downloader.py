@@ -1,4 +1,5 @@
 import asyncio
+from typing import Self
 
 import pytest
 import yt_dlp
@@ -15,12 +16,21 @@ def test_ytdlp_uses_node_runtime() -> None:
     assert downloader._download_base_opts.get("js_runtimes") == {"node": {}}
 
 
+def test_ytdlp_uses_global_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PROXY", "http://proxy:23333")
+
+    downloader = YtdlpDownloader()
+
+    assert downloader._extract_base_opts.get("proxy") == "http://proxy:23333"
+    assert downloader._download_base_opts.get("proxy") == "http://proxy:23333"
+
+
 def test_ytdlp_errors_become_user_facing_tips(monkeypatch: pytest.MonkeyPatch) -> None:
     class FailingYoutubeDL:
         def __init__(self, _options: object) -> None:
             pass
 
-        def __enter__(self):
+        def __enter__(self) -> Self:
             return self
 
         def __exit__(self, *_args: object) -> None:

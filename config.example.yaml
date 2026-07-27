@@ -55,8 +55,6 @@ media_parser:
   parser_spotify_ck: ""
   parser_netease_music_ck: ""
   parser_qq_music_ck: ""
-  # 仅链接解析请求使用的代理；null 表示不单独设置。
-  parser_proxy: null
   # 是否上传音频文件，以及是否将媒体编码为 base64 发送。
   parser_need_upload: false
   parser_use_base64: false

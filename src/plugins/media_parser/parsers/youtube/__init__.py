@@ -108,7 +108,7 @@ class YouTubeParser(BaseParser):
 
         async with httpx.AsyncClient(
             headers=self.headers,
-            proxy=get_http_proxy_for_url(url, pconfig.proxy),
+            proxy=get_http_proxy_for_url(url),
             timeout=self.timeout,
         ) as client:
             response = await client.post(url, json=payload)

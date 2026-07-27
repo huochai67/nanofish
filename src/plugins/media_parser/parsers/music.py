@@ -8,6 +8,7 @@ from typing import Any, ClassVar
 
 from httpx import AsyncClient, HTTPError
 from nonebot import logger
+from src.proxy import get_http_proxy_for_url
 
 from ..download import yt_dlp_downloader
 from ..exception import IgnoreException, ParseException
@@ -129,7 +130,9 @@ class MusicParser(BaseParser, ABC):
     async def _get_json(self, url: str, **kwargs: Any) -> Any | None:
         try:
             async with AsyncClient(
-                headers=self.headers, timeout=self.timeout, proxy=pconfig.proxy
+                headers=self.headers,
+                timeout=self.timeout,
+                proxy=get_http_proxy_for_url(url),
             ) as client:
                 response = await client.get(url, follow_redirects=True, **kwargs)
                 response.raise_for_status()

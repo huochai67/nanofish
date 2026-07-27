@@ -14,6 +14,7 @@ from rich.progress import (
     TextColumn,
     DownloadColumn,
 )
+from src.proxy import get_http_proxy_from_env
 
 from .task import auto_task
 from ..utils import merge_av, safe_unlink, generate_file_name, is_module_available
@@ -29,7 +30,7 @@ class StreamDownloader:
         self.client: httpx.AsyncClient = httpx.AsyncClient(
             timeout=DOWNLOAD_TIMEOUT,
             verify=False,
-            proxy=pconfig.proxy,
+            proxy=get_http_proxy_from_env(),
         )
 
     async def aclose(self):
@@ -108,7 +109,7 @@ class StreamDownloader:
     ) -> Path:
         async with curl_cffi.AsyncSession(
             allow_redirects=True,
-            proxy=pconfig.proxy,
+            proxy=get_http_proxy_from_env(),
         ) as session:
             response: curl_cffi.Response = await session.get(
                 url,

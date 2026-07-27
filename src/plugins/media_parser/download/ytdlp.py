@@ -8,6 +8,7 @@ import yt_dlp
 from msgspec import Struct, convert
 from nonebot import logger
 from yt_dlp.utils import DownloadError
+from src.proxy import get_http_proxy_from_env
 
 from .task import auto_task
 from ..utils import LimitedSizeDict, generate_file_name
@@ -70,7 +71,7 @@ class YtdlpDownloader:
         }
         self._download_base_opts: _Params = {"js_runtimes": {"node": {}}}
         self._url_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
-        if proxy := pconfig.proxy:
+        if proxy := get_http_proxy_from_env():
             self._download_base_opts["proxy"] = proxy
             self._extract_base_opts["proxy"] = proxy
 
