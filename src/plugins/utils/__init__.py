@@ -103,6 +103,11 @@ def _sent_message_id(result: object) -> int | None:
         logger.warning("processing message send returned no message id: %r", result)
         return None
     message_id = result.get("message_id")
+    if not isinstance(message_id, int | str):
+        logger.warning(
+            "processing message send returned invalid message id: %r", result
+        )
+        return None
     try:
         return int(message_id)
     except (TypeError, ValueError):
@@ -113,7 +118,7 @@ def _sent_message_id(result: object) -> int | None:
 
 
 async def send_processing_reply(
-    matcher: Matcher,
+    matcher: type[Matcher],
     bot: Bot,
     event: MessageEvent,
     text: str,
@@ -124,7 +129,7 @@ async def send_processing_reply(
 
 
 async def finish_processing_reply(
-    matcher: Matcher,
+    matcher: type[Matcher],
     processing: ProcessingReply,
     event: MessageEvent,
     message: Message | str,

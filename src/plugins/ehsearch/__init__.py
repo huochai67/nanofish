@@ -37,8 +37,8 @@ __plugin_meta__ = PluginMetadata(
     config=Config,
 )
 
-config = get_yaml_plugin_config(Config, "ehsearch")
-ehapi = EhAPI(
+config: Config = get_yaml_plugin_config(Config, "ehsearch")
+ehapi: EhAPI = EhAPI(
     proxy=config.proxy,
     cookies={
         "ipb_member_id": config.eh_ipb_member_id,
