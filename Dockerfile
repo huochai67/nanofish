@@ -42,7 +42,7 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ffmpeg \
   && pip install --no-cache-dir --no-index --find-links=/wheel -r /wheel/requirements.txt \
   && pip install --no-cache-dir gunicorn \
-  && node -e "process.exit(Number(process.versions.node.split('.')[0]) < 22)" \
+  && node -e "if (Number(process.versions.node.split('.')[0]) < 22) process.exit(1)" \
   && python -c "import yt_dlp_ejs" \
   && rm -rf /wheel \
   && playwright install --with-deps chromium \
