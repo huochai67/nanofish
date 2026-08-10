@@ -14,7 +14,13 @@ from src.proxy import (
 
 from .config import Config
 
-_SENSITIVE_HEADERS = {"authorization", "cookie", "proxy-authorization", "x-api-key"}
+_SENSITIVE_HEADERS = {
+    "authorization",
+    "cookie",
+    "proxy-authorization",
+    "x-api-key",
+    "x-goog-api-key",
+}
 _SENSITIVE_QUERY_PARAMS = {"api_key", "key", "token"}
 
 

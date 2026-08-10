@@ -1,6 +1,7 @@
-"""OpenAI-compatible image generate / edit helpers for llm plugin.
+"""Image generate / edit helpers for llm plugin, dispatched by profile backend.
 
-Other plugins::
+Backends: OpenAI Images API (SDK), xAI Images API (JSON), Gemini Interactions
+API (REST). Other plugins::
 
     require("llm")
     from ..llm import image_generate, image_edit, image_to_cq
@@ -18,22 +19,21 @@ from nonebot import logger, require
 from nonebot.adapters.onebot.v11.message import Message
 from openai import APIStatusError, APITimeoutError, AsyncOpenAI, OpenAIError
 
-from src.plugin_config import get_yaml_plugin_config
 from src.proxy import get_http_proxy_for_url
-
-from .config import Config
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from .config import ImageModelConfig
+
 require("utils")
-from ..utils import (
+from ..utils import (  # noqa: I001  # runtime import must follow require()
     HttpRequestError,
     http_get,
+    http_post,
     request_error_message,
 )
 
-config: Config = get_yaml_plugin_config(Config, "llm")
 
 MAX_REFERENCE_IMAGES = 16
 
@@ -46,42 +46,26 @@ class ImageAPIError(Exception):
         super().__init__(message)
 
 
-def _client() -> AsyncOpenAI:
-    proxy = get_http_proxy_for_url(config.openai_api_base)
+def _openai_client(profile: ImageModelConfig) -> AsyncOpenAI:
+    proxy = get_http_proxy_for_url(profile.api_base)
     http_client = (
-        httpx.AsyncClient(proxy=proxy, timeout=config.image_timeout) if proxy else None
+        httpx.AsyncClient(proxy=proxy, timeout=profile.timeout) if proxy else None
     )
     return AsyncOpenAI(
-        api_key=config.openai_api_key,
-        base_url=config.openai_api_base,
-        timeout=config.image_timeout,
+        api_key=profile.api_key,
+        base_url=profile.api_base,
+        timeout=profile.timeout,
         http_client=http_client,
     )
 
 
-def _optional_kwargs(
-    *,
-    size: str | None,
-    response_format: str | None,
-) -> dict[str, Any]:
+def _optional_kwargs(profile: ImageModelConfig) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
-    if size:
-        kwargs["size"] = size
-    if response_format:
-        kwargs["response_format"] = response_format
+    if profile.size:
+        kwargs["size"] = profile.size
+    if profile.response_format:
+        kwargs["response_format"] = profile.response_format
     return kwargs
-
-
-def _resolve_model(model: str | None) -> str:
-    return model or config.image_model
-
-
-def _resolve_size(size: str | None) -> str | None:
-    return config.image_size if size is None else size
-
-
-def _resolve_response_format(response_format: str | None) -> str | None:
-    return config.image_response_format if response_format is None else response_format
 
 
 def _guess_filename_and_type(url: str, content_type: str | None) -> tuple[str, str]:
@@ -99,10 +83,14 @@ def _guess_filename_and_type(url: str, content_type: str | None) -> tuple[str, s
     return name, mime
 
 
-async def _download_image(url: str) -> tuple[bytes, str, str]:
+async def _download_image(
+    url: str,
+    *,
+    timeout: float,  # noqa: ASYNC109  # HTTP client timeout
+) -> tuple[bytes, str, str]:
     """Return (bytes, filename, content_type)."""
     try:
-        resp = await http_get(url, timeout=config.image_timeout)
+        resp = await http_get(url, timeout=timeout)
     except HttpRequestError as e:
         raise ImageAPIError(e.message) from e
     content_type = resp.headers.get("content-type")
@@ -115,19 +103,24 @@ async def _download_image(url: str) -> tuple[bytes, str, str]:
 async def _to_file_tuple(
     image: bytes | str,
     *,
+    timeout: float,  # noqa: ASYNC109  # HTTP client timeout
     filename: str = "image.png",
 ) -> tuple[str, bytes, str]:
     if isinstance(image, bytes):
         mime, _ = mimetypes.guess_type(filename)
         return filename, image, mime or "image/png"
     if isinstance(image, str) and image.startswith(("http://", "https://")):
-        data, name, mime = await _download_image(image)
+        data, name, mime = await _download_image(image, timeout=timeout)
         return name, data, mime
     msg = "image 须为 bytes 或 http(s) URL"
     raise ImageAPIError(msg)
 
 
-async def _response_to_b64_list(response: Any) -> list[str]:
+async def _response_to_b64_list(
+    response: Any,
+    *,
+    timeout: float,  # noqa: ASYNC109  # HTTP client timeout
+) -> list[str]:
     data = getattr(response, "data", None) or []
     if not data:
         raise ImageAPIError("生图 API 未返回图片")
@@ -140,7 +133,7 @@ async def _response_to_b64_list(response: Any) -> list[str]:
             continue
         url = getattr(item, "url", None)
         if url:
-            raw, _, _ = await _download_image(url)
+            raw, _, _ = await _download_image(url, timeout=timeout)
             results.append(base64.b64encode(raw).decode("ascii"))
             continue
         logger.warning("[LLM/image] item missing b64_json and url: %r", item)
@@ -166,44 +159,203 @@ def _map_openai_error(exc: OpenAIError) -> ImageAPIError:
     return ImageAPIError(openai_error_message(exc))
 
 
+def max_reference_images(profile: ImageModelConfig) -> int:
+    """Vendor-specific reference image cap; the global cap stays as a first check."""
+    if profile.backend == "grok":
+        return 3
+    if profile.backend == "gemini":
+        return 14
+    return MAX_REFERENCE_IMAGES
+
+
+def _base64_ascii(data: bytes) -> str:
+    return base64.b64encode(data).decode("ascii")
+
+
+def _image_data_uri(data: bytes, mime: str) -> str:
+    return f"data:{mime};base64,{_base64_ascii(data)}"
+
+
+async def _grok_request(
+    profile: ImageModelConfig,
+    path: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    """POST a JSON payload to the xAI Images API and return the JSON body."""
+    url = f"{profile.api_base.rstrip('/')}/{path}"
+    try:
+        response = await http_post(
+            url,
+            headers={"Authorization": f"Bearer {profile.api_key}"},
+            json=payload,
+            timeout=profile.timeout,
+        )
+    except HttpRequestError as e:
+        raise ImageAPIError(e.message) from e
+    try:
+        body = response.json()
+    except ValueError:
+        raise ImageAPIError("生图 API 返回无法解析的图片数据") from None
+    if not isinstance(body, dict):
+        raise ImageAPIError("生图 API 返回无法解析的图片数据")
+    return body
+
+
+async def _json_data_to_b64_list(
+    body: dict[str, object],
+    *,
+    timeout: float,  # noqa: ASYNC109  # HTTP client timeout
+) -> list[str]:
+    data = body.get("data")
+    if not isinstance(data, list) or not data:
+        raise ImageAPIError("生图 API 返回无法解析的图片数据")
+
+    results: list[str] = []
+    for item in data:
+        if not isinstance(item, dict):
+            logger.warning("[LLM/image] item is not an object: %r", item)
+            continue
+        b64 = item.get("b64_json")
+        if isinstance(b64, str) and b64:
+            results.append(b64)
+            continue
+        url = item.get("url")
+        if isinstance(url, str) and url:
+            raw, _, _ = await _download_image(url, timeout=timeout)
+            results.append(_base64_ascii(raw))
+            continue
+        logger.warning("[LLM/image] item missing b64_json and url: %r", item)
+    if not results:
+        raise ImageAPIError("生图 API 返回无法解析的图片数据")
+    return results
+
+
+async def _gemini_request(
+    profile: ImageModelConfig,
+    input: list[dict[str, str]],  # noqa: A002  # matches the Interactions API field
+    response_format: dict[str, str],
+) -> list[str]:
+    """POST one stateless interaction to the Gemini Interactions API.
+
+    ``store`` stays ``False``: /draw is single-turn and never retains
+    user reference images server-side.
+    """
+    url = f"{profile.api_base.rstrip('/')}/interactions"
+    payload: dict[str, object] = {
+        "model": profile.model,
+        "input": input,
+        "response_format": response_format,
+        "store": False,
+    }
+    try:
+        response = await http_post(
+            url,
+            headers={"x-goog-api-key": profile.api_key},
+            json=payload,
+            timeout=profile.timeout,
+        )
+    except HttpRequestError as e:
+        raise ImageAPIError(e.message) from e
+    try:
+        body = response.json()
+    except ValueError:
+        raise ImageAPIError("生图 API 返回无法解析的图片数据") from None
+    if not isinstance(body, dict):
+        raise ImageAPIError("生图 API 返回无法解析的图片数据")
+
+    results = _extract_gemini_images(body)
+    if not results:
+        raise ImageAPIError("生图 API 未返回图片")
+    return results
+
+
+def _extract_gemini_images(body: dict[str, object]) -> list[str]:
+    """Collect non-empty image data from every ``model_output`` step."""
+    results: list[str] = []
+    steps = body.get("steps")
+    if isinstance(steps, list):
+        for step in steps:
+            if not isinstance(step, dict) or step.get("type") != "model_output":
+                continue
+            content = step.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict) or block.get("type") != "image":
+                    continue
+                data = block.get("data")
+                if isinstance(data, str) and data:
+                    results.append(data)
+    return results
+
+
+def _grok_generation_payload(
+    profile: ImageModelConfig,
+    text: str,
+) -> dict[str, object]:
+    payload: dict[str, object] = {"model": profile.model, "prompt": text, "n": 1}
+    if profile.response_format:
+        payload["response_format"] = profile.response_format
+    if profile.aspect_ratio:
+        payload["aspect_ratio"] = profile.aspect_ratio
+    if profile.resolution:
+        payload["resolution"] = profile.resolution
+    return payload
+
+
+def _gemini_response_format(profile: ImageModelConfig) -> dict[str, str]:
+    response_format: dict[str, str] = {"type": "image"}
+    if profile.aspect_ratio:
+        response_format["aspect_ratio"] = profile.aspect_ratio
+    if profile.resolution:
+        response_format["image_size"] = profile.resolution
+    return response_format
+
+
 async def image_generate(
     prompt: str,
     *,
-    model: str | None = None,
-    size: str | None = None,
-    response_format: str | None = None,
+    profile: ImageModelConfig,
 ) -> list[str]:
     """Text-to-image. Returns base64 strings (no data: prefix). Does not enforce ACL."""
     text = prompt.strip()
     if not text:
         raise ImageAPIError("prompt 不能为空")
 
-    kwargs = _optional_kwargs(
-        size=_resolve_size(size),
-        response_format=_resolve_response_format(response_format),
-    )
-    try:
-        async with _client() as client:
-            response = await client.images.generate(
-                model=_resolve_model(model),
-                prompt=text,
-                n=1,
-                **kwargs,
-            )
-    except OpenAIError as e:
-        logger.warning("[LLM/image] generate failed: %s", e)
-        raise _map_openai_error(e) from e
+    if profile.backend == "openai":
+        kwargs = _optional_kwargs(profile)
+        try:
+            async with _openai_client(profile) as client:
+                response = await client.images.generate(
+                    model=profile.model,
+                    prompt=text,
+                    n=1,
+                    **kwargs,
+                )
+        except OpenAIError as e:
+            logger.warning("[LLM/image] generate failed: %s", e)
+            raise _map_openai_error(e) from e
+        return await _response_to_b64_list(response, timeout=profile.timeout)
 
-    return await _response_to_b64_list(response)
+    if profile.backend == "grok":
+        body = await _grok_request(
+            profile, "images/generations", _grok_generation_payload(profile, text)
+        )
+        return await _json_data_to_b64_list(body, timeout=profile.timeout)
+
+    # gemini
+    return await _gemini_request(
+        profile,
+        [{"type": "text", "text": text}],
+        _gemini_response_format(profile),
+    )
 
 
 async def image_edit(
     prompt: str,
     image: bytes | str | Sequence[bytes | str],
     *,
-    model: str | None = None,
-    size: str | None = None,
-    response_format: str | None = None,
+    profile: ImageModelConfig,
     filename: str = "image.png",
 ) -> list[str]:
     """Image-to-image edits using one or more raw images or downloadable URLs.
@@ -219,27 +371,53 @@ async def image_edit(
         raise ImageAPIError("至少需要一张参考图")
     if len(images) > MAX_REFERENCE_IMAGES:
         raise ImageAPIError(f"参考图最多支持 {MAX_REFERENCE_IMAGES} 张")
+    limit = max_reference_images(profile)
+    if len(images) > limit:
+        raise ImageAPIError(f"当前生图后端最多支持 {limit} 张参考图")
 
-    image_files = [await _to_file_tuple(item, filename=filename) for item in images]
-    image_param: Any = image_files[0] if len(image_files) == 1 else image_files
-    kwargs = _optional_kwargs(
-        size=_resolve_size(size),
-        response_format=_resolve_response_format(response_format),
+    image_files = [
+        await _to_file_tuple(item, timeout=profile.timeout, filename=filename)
+        for item in images
+    ]
+
+    if profile.backend == "openai":
+        image_param: Any = image_files[0] if len(image_files) == 1 else image_files
+        kwargs = _optional_kwargs(profile)
+        try:
+            async with _openai_client(profile) as client:
+                response = await client.images.edit(
+                    model=profile.model,
+                    image=image_param,
+                    prompt=text,
+                    n=1,
+                    **kwargs,
+                )
+        except OpenAIError as e:
+            logger.warning("[LLM/image] edit failed: %s", e)
+            raise _map_openai_error(e) from e
+        return await _response_to_b64_list(response, timeout=profile.timeout)
+
+    if profile.backend == "grok":
+        payload = _grok_generation_payload(profile, text)
+        references = [
+            {"url": _image_data_uri(data, mime)} for _, data, mime in image_files
+        ]
+        if len(references) == 1:
+            payload["image"] = references[0]
+        else:
+            payload["images"] = references
+        body = await _grok_request(profile, "images/edits", payload)
+        return await _json_data_to_b64_list(body, timeout=profile.timeout)
+
+    # gemini
+    input_blocks: list[dict[str, str]] = [{"type": "text", "text": text}]
+    for _, data, mime in image_files:
+        input_blocks.append(
+            {"type": "image", "mime_type": mime, "data": _base64_ascii(data)}
+        )
+    return await _gemini_request(
+        profile, input_blocks, _gemini_response_format(profile)
     )
-    try:
-        async with _client() as client:
-            response = await client.images.edit(
-                model=_resolve_model(model),
-                image=image_param,
-                prompt=text,
-                n=1,
-                **kwargs,
-            )
-    except OpenAIError as e:
-        logger.warning("[LLM/image] edit failed: %s", e)
-        raise _map_openai_error(e) from e
-
-    return await _response_to_b64_list(response)
 
 
 def image_to_cq(b64: str) -> Message:
@@ -262,5 +440,6 @@ __all__ = [
     "image_generate",
     "image_to_cq",
     "images_to_cq",
+    "max_reference_images",
     "openai_error_message",
 ]

@@ -33,7 +33,7 @@ from ..utils import (
     reply_to_event,
     send_processing_reply,
 )
-from .config import Config
+from .config import Config, ImageModelConfig
 from .images import (
     MAX_REFERENCE_IMAGES,
     ImageAPIError,
@@ -41,6 +41,7 @@ from .images import (
     image_generate,
     image_to_cq,
     images_to_cq,
+    max_reference_images,
     openai_error_message,
 )
 
@@ -49,7 +50,7 @@ __plugin_meta__ = PluginMetadata(
     description="多模态 LLM 对话与 OpenAI 兼容生图/图生图",
     usage=(
         "/llm <内容>，可附带图片/文件，或回复消息；"
-        "/draw <描述> 文生图；直接引用消息与当前消息中的图片可作为参考图"
+        "/draw [@模型] <描述> 文生图；直接引用消息与当前消息中的图片可作为参考图"
         "（引用优先，最多 16 张）"
     ),
     config=Config,
@@ -309,13 +310,34 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
         )
 
 
+def _parse_draw_model_selector(text: str) -> tuple[str | None, str]:
+    parts = text.split(maxsplit=1)
+    if not parts or not parts[0].startswith("@"):
+        return None, text
+    prompt = parts[1] if len(parts) > 1 else ""
+    return parts[0][1:], prompt
+
+
+def _resolve_draw_profile(alias: str | None) -> ImageModelConfig:
+    if alias is None:
+        return config.image_models[config.image_default_model]
+    try:
+        return config.image_models[alias]
+    except KeyError:
+        shown_alias = alias or "(空)"
+        available = " ".join(f"@{name}" for name in config.image_models)
+        msg = f"未知生图模型: @{shown_alias}；可用模型: {available}"
+        raise ValueError(msg) from None
+
+
 async def _resolve_draw_request(
     bot: Bot,
     event: MessageEvent,
     arg: Message,
-) -> tuple[str, list[str]]:
-    """Resolve prompt and direct-reply images, without traversing nested replies."""
-    direct = get_plaintext(arg).strip()
+) -> tuple[str, list[str], ImageModelConfig]:
+    """Resolve the selected profile, prompt, and direct-reply images."""
+    alias, direct = _parse_draw_model_selector(get_plaintext(arg).strip())
+    profile = _resolve_draw_profile(alias)
     msg_reply = await get_reply(bot=bot, msg=event.original_message)
     raw = msg_reply.get("raw_message") if msg_reply else None
     replied_message = Message(raw) if raw else None
@@ -324,7 +346,7 @@ async def _resolve_draw_request(
     image_urls = (
         get_image_urls(replied_message) if replied_message else []
     ) + get_image_urls(event.original_message)
-    return prompt, image_urls
+    return prompt, image_urls, profile
 
 
 async def _consume_draw_quota_or_finish(event: MessageEvent) -> None:
@@ -335,6 +357,40 @@ async def _consume_draw_quota_or_finish(event: MessageEvent) -> None:
         )
 
 
+async def _finish_draw_setup_error(event: MessageEvent, error: Exception) -> None:
+    if isinstance(error, ValueError):
+        await draw.finish(reply_to_event(event, str(error)), at_sender=True)
+        return
+    logger.exception("[LLM/draw] request setup failed: %s", error)
+    await draw.finish(reply_to_event(event, "生图失败，请稍后重试"))
+
+
+async def _finish_if_over_reference_limit(
+    event: MessageEvent,
+    image_urls: list[str],
+    profile: ImageModelConfig,
+) -> bool:
+    """Return True after finishing when reference images exceed a limit.
+
+    Runs before any quota check or upstream API call. In production
+    ``draw.finish`` raises FinishedException and never returns.
+    """
+    if len(image_urls) > MAX_REFERENCE_IMAGES:
+        await draw.finish(
+            reply_to_event(event, f"参考图最多支持 {MAX_REFERENCE_IMAGES} 张"),
+            at_sender=True,
+        )
+        return True
+    limit = max_reference_images(profile)
+    if len(image_urls) > limit:
+        await draw.finish(
+            reply_to_event(event, f"当前生图后端最多支持 {limit} 张参考图"),
+            at_sender=True,
+        )
+        return True
+    return False
+
+
 @draw.handle()
 async def handle_draw(
     bot: Bot,
@@ -342,33 +398,30 @@ async def handle_draw(
     arg: Message = CommandArg(),
 ) -> None:
     try:
+        prompt, image_urls, profile = await _resolve_draw_request(bot, event, arg)
+        if not prompt:
+            await draw.finish(
+                reply_to_event(
+                    event,
+                    "用法: /draw [@模型] <描述>；"
+                    "可附图或直接引用含图片的消息作为参考图",
+                ),
+                at_sender=True,
+            )
+            return
+        if await _finish_if_over_reference_limit(event, image_urls, profile):
+            return
+
         quota = check_quota(event, "draw")
         if not quota.allowed:
             await draw.finish(
                 reply_to_event(event, quota.message or "额度不足"), at_sender=True
             )
             return
-
-        prompt, image_urls = await _resolve_draw_request(bot, event, arg)
-        if not prompt:
-            await draw.finish(
-                reply_to_event(
-                    event, "用法: /draw <描述>；可附图或直接引用含图片的消息作为参考图"
-                ),
-                at_sender=True,
-            )
-            return
-        if len(image_urls) > MAX_REFERENCE_IMAGES:
-            await draw.finish(
-                reply_to_event(event, f"参考图最多支持 {MAX_REFERENCE_IMAGES} 张"),
-                at_sender=True,
-            )
-            return
     except FinishedException:
         raise
     except Exception as e:  # noqa: BLE001
-        logger.exception("[LLM/draw] request setup failed: %s", e)
-        await draw.finish(reply_to_event(event, "生图失败，请稍后重试"))
+        await _finish_draw_setup_error(event, e)
         return
 
     await _consume_draw_quota_or_finish(event)
@@ -376,10 +429,10 @@ async def handle_draw(
     try:
         if image_urls:
             logger.debug("[LLM/draw] edit prompt=%r images=%r", prompt, image_urls)
-            b64_list = await image_edit(prompt, image_urls)
+            b64_list = await image_edit(prompt, image_urls, profile=profile)
         else:
             logger.debug("[LLM/draw] generate prompt=%r", prompt)
-            b64_list = await image_generate(prompt)
+            b64_list = await image_generate(prompt, profile=profile)
 
         await finish_processing_reply(
             draw,
