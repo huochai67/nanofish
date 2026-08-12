@@ -83,10 +83,10 @@ class Author:
 
     name: str
     """作者名称"""
-    avatar: PathTask | None = None
-    """作者头像 URL 或本地路径"""
-    pendant: PathTask | None = None
-    """作者头像挂件"""
+    avatar: str | None = None
+    """作者头像 URL（由前端页面加载，不下载）"""
+    pendant: str | None = None
+    """作者头像挂件 URL（由前端页面加载，不下载）"""
     description: str | None = None
     """作者个性签名等"""
 
@@ -217,10 +217,6 @@ class ParseResult:
         self,
         img_only: bool = False,
     ) -> Iterator[Awaitable[Path | None]]:
-        if author := self.author:
-            if author.avatar:
-                yield author.avatar.get()
-
         for cont in self.contents:
             if not img_only or isinstance(cont, ImageContent):
                 yield cont.path_task.get()

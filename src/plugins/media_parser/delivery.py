@@ -34,10 +34,11 @@ def _normalize_image_url(source_url: str) -> str | None:
     return None
 
 
-def _image_url(task: PathTask | None) -> str | None:
+def _image_url(source: PathTask | str | None) -> str | None:
     """Return a remote image URL suitable for the frontend screenshot page."""
-    source_url = task.source_url if task is not None else None
-    return _normalize_image_url(source_url) if source_url else None
+    if isinstance(source, PathTask):
+        source = source.source_url
+    return _normalize_image_url(source) if source else None
 
 
 async def _result_data(result: ParseResult) -> dict[str, Any]:

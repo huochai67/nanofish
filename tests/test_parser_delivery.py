@@ -85,8 +85,8 @@ def test_delivery_serializes_remote_image_urls_without_base64() -> None:
             platform=Platform("bilibili", "哔哩哔哩"),
             author=Author(
                 name="Author",
-                avatar=_image_task(avatar),
-                pendant=_image_task(pendant),
+                avatar=avatar,
+                pendant=pendant,
             ),
             contents=[
                 ImageContent(_image_task(image)),
@@ -139,7 +139,7 @@ def test_delivery_omits_images_without_https_source_url() -> None:
     async def serialize():
         result = ParseResult(
             platform=Platform("bilibili", "哔哩哔哩"),
-            author=Author(name="Author", avatar=_image_task()),
+            author=Author(name="Author", avatar="http://cdn.example.com/avatar.jpg"),
             contents=[
                 ImageContent(_image_task("http://cdn.example.com/image.jpg")),
                 VideoContent(_image_task(), cover=_image_task()),

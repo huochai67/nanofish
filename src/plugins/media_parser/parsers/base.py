@@ -174,16 +174,9 @@ class BaseParser:
 
         author = Author(name=name, description=description)
 
-        if avatar_url:
-            author.avatar = PathTask(
-                downloader.download_img(avatar_url, ext_headers=self.headers),
-                source_url=avatar_url,
-            )
-        if pendant_url:
-            author.pendant = PathTask(
-                downloader.download_img(pendant_url, ext_headers=self.headers),
-                source_url=pendant_url,
-            )
+        # 头像与挂件仅用于前端卡片展示, 直接交给浏览器加载, 不在此下载
+        author.avatar = avatar_url
+        author.pendant = pendant_url
 
         return author
 
