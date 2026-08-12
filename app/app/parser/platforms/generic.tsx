@@ -6,7 +6,6 @@ import {
   AudioLines,
   Bookmark,
   CirclePoundSterling,
-  CircleUserRound,
   Eye,
   Link as LinkIcon,
   MessageCircle,
@@ -118,7 +117,7 @@ function PostCard({
 
       <div className="space-y-4 px-4 py-4 sm:px-5 sm:py-5">
         {result.author ? <div className="flex items-center gap-3">
-          {result.author.avatar ? <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-black/[0.06]" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <span className="flex h-10 w-10 items-center justify-center rounded-full text-white" style={{ backgroundColor: appearance.accent }}><CircleUserRound size={21} /></span>}
+          {result.author.avatar ? <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-black/[0.06]" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <img src="/parser/avatar.webp" alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-black/[0.06]" onLoad={onAsset} onError={onAsset} />}
           <div className="min-w-0"><p className={`truncate text-sm font-semibold ${text}`}>{result.author.name}</p><p className={`truncate text-xs ${muted}`}>{formatTime(result.timestamp) ?? result.author.description ?? ""}</p></div>
         </div> : null}
         {result.title ? <h1 className={`text-lg font-bold leading-snug sm:text-xl ${text}`}>{result.title}</h1> : null}

@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
 import {
-  CircleUserRound,
   EllipsisVertical,
   MessageSquareText,
   Play,
@@ -68,9 +67,13 @@ function YoutubePost({ result, maxGridImages, onAsset }: { result: ParserPost; m
             onError={onAsset}
           />
         ) : (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#606060] text-white">
-            <CircleUserRound size={22} />
-          </span>
+          <img
+            src="/parser/avatar.webp"
+            alt=""
+            className="h-10 w-10 shrink-0 rounded-full object-cover"
+            onLoad={onAsset}
+            onError={onAsset}
+          />
         )}
 
         <div className="min-w-0 flex-1">

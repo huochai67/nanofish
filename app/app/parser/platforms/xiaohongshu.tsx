@@ -32,7 +32,7 @@ function XiaohongshuPost({ result, onAsset }: { result: ParserPost; onAsset: () 
 
       <section className="flex flex-1 flex-col px-4 py-4 sm:min-h-[600px] sm:px-5 sm:py-5">
         <header className="flex items-center gap-2.5">
-          {result.author?.avatar ? <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <img src="/parser/avatar.png" alt="" className="h-10 w-10 rounded-full object-cover" onLoad={onAsset} onError={onAsset} />}
+          {result.author?.avatar ? <img src={result.author.avatar} alt="" className="h-10 w-10 rounded-full object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <img src="/parser/avatar.webp" alt="" className="h-10 w-10 rounded-full object-cover" onLoad={onAsset} onError={onAsset} />}
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-[#333]">{result.author?.name ?? "小红书用户"}</span>
           <span className="shrink-0 rounded-full bg-[#ff2442] px-4 py-1.5 text-xs font-medium text-white sm:px-5 sm:py-2 sm:text-sm">关注</span>
         </header>

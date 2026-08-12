@@ -74,7 +74,7 @@ function BilibiliPost({ result, onAsset }: { result: ParserPost; onAsset: () => 
             />
           ) : (
             <img
-              src="/parser/avatar.png"
+              src="/parser/avatar.webp"
               alt=""
               className="h-[52px] w-[52px] rounded-full object-cover"
               onLoad={onAsset}

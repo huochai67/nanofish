@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import { BadgeCheck, Bookmark, CircleUserRound, Ellipsis, Heart, MessageCircle, MessageCircleMore, Play, Repeat2, Share2 } from "lucide-react";
+import { BadgeCheck, Bookmark, Ellipsis, Heart, MessageCircle, MessageCircleMore, Play, Repeat2, Share2 } from "lucide-react";
 import { assetCount, GenericCard, type PlatformAppearance } from "./generic";
 import type { ParserPost, ParserResult, PostMedia } from "../types";
 
@@ -32,7 +32,7 @@ function TwitterPost({ result, maxGridImages, onAsset }: { result: ParserPost; m
   return (
     <article data-parser-card className="rounded-xl border border-[#cfd9de] bg-white px-4 py-3 text-[#0f1419] shadow-pop sm:px-5">
       <div className="flex gap-3">
-        {result.author?.avatar ? <img src={result.author.avatar} alt="" className="h-10 w-10 shrink-0 rounded object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-[#0f1419] text-white"><CircleUserRound size={22} /></span>}
+        {result.author?.avatar ? <img src={result.author.avatar} alt="" className="h-10 w-10 shrink-0 rounded object-cover" referrerPolicy="no-referrer" onLoad={onAsset} onError={onAsset} /> : <img src="/parser/avatar.webp" alt="" className="h-10 w-10 shrink-0 rounded object-cover" onLoad={onAsset} onError={onAsset} />}
         <div className="min-w-0 flex-1">
           <header className="flex items-start gap-1"><div className="min-w-0 flex-1 leading-5"><div className="flex min-w-0 items-center gap-1"><span className="truncate text-[15px] font-bold">{result.author?.name ?? "X 用户"}</span><BadgeCheck size={17} className="shrink-0 text-[#1d9bf0]" fill="currentColor" stroke="white" strokeWidth={2.5} /></div><p className="truncate text-sm text-[#536471]">{handle}</p></div><Ellipsis size={20} className="mt-0.5 shrink-0 text-[#536471]" /></header>
           {tweet ? <p className="mt-3 whitespace-pre-wrap text-base leading-6">{tweet}</p> : null}
