@@ -1,4 +1,5 @@
 import re
+import stat
 import asyncio
 import hashlib
 from typing import Any, TypeVar
@@ -34,6 +35,20 @@ async def safe_unlink(path: Path):
     await AnyioPath(path).unlink(missing_ok=True)
 
 
+async def valid_cached_file(path: Path) -> Path | None:
+    """返回有效的非空缓存文件; 零字节缓存被安全删除; 非普通文件返回 None"""
+    try:
+        st = path.stat()
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(st.st_mode):
+        return None
+    if st.st_size == 0:
+        await safe_unlink(path)
+        return None
+    return path
+
+
 async def exec_ffmpeg_cmd(cmd: list[str]) -> None:
     """执行 ffmpeg 命令"""
     logger.debug(f"Executing ffmpeg command: {' '.join(cmd)}")
@@ -56,8 +71,9 @@ async def merge_av(
     v_path: Path,
     a_path: Path,
     output_path: Path,
+    output_format: str | None = None,
 ) -> None:
-    """合并视频和音频"""
+    """合并视频和音频; output_format 用于暂存文件名不含扩展名时显式指定封装格式"""
     logger.info(f"Merging {v_path.name} and {a_path.name} to {output_path.name}")
 
     cmd = [
@@ -73,8 +89,10 @@ async def merge_av(
         "0:v:0",
         "-map",
         "1:a:0",
-        str(output_path),
     ]
+    if output_format:
+        cmd.extend(["-f", output_format])
+    cmd.append(str(output_path))
 
     await exec_ffmpeg_cmd(cmd)
     await asyncio.gather(safe_unlink(v_path), safe_unlink(a_path))

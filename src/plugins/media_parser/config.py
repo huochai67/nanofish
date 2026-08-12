@@ -50,6 +50,8 @@ class Config(BaseModel):
     """B站视频分辨率"""
     parser_need_forward_contents: bool = True
     """是否需要转发媒体内容"""
+    parser_verify_ssl: bool = True
+    """下载媒体时是否验证 TLS 证书; 仅当 CDN 证书不兼容时设为 false"""
 
     @property
     def nickname(self) -> str:
@@ -140,6 +142,11 @@ class Config(BaseModel):
     def need_forward_contents(self) -> bool:
         """是否需要转发媒体内容"""
         return self.parser_need_forward_contents
+
+    @property
+    def verify_ssl(self) -> bool:
+        """是否验证下载媒体时的 TLS 证书"""
+        return self.parser_verify_ssl
 
 
 pconfig: Config = get_yaml_plugin_config(Config, "media_parser")

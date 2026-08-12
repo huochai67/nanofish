@@ -131,10 +131,10 @@ class BilibiliParser(BaseParser):
             output_path = pconfig.cache_dir / f"{video_info.bvid}-{page_num}.mp4"
             if output_path.exists():
                 return output_path
-            v_url, a_url = await self.extract_download_urls(video=video, page_index=page_info.index)
             if page_info.duration > pconfig.duration_maximum:
                 logger.warning(f"视频时长 {page_info.duration} 秒, 超过 {pconfig.duration_maximum} 秒, 取消下载")
                 raise IgnoreException
+            v_url, a_url = await self.extract_download_urls(video=video, page_index=page_info.index)
             if a_url is not None:
                 path = await self.downloader.download_av_and_merge(
                     v_url,
@@ -143,9 +143,9 @@ class BilibiliParser(BaseParser):
                     ext_headers=self.headers,
                 )
             else:
-                path = await self.downloader._download_file(
+                path = await self.downloader.download_video(
                     v_url,
-                    file_name=output_path.name,
+                    video_name=output_path.name,
                     ext_headers=self.headers,
                 )
             return path

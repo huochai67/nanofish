@@ -61,6 +61,8 @@ media_parser:
   # 单位分别为 MB 和秒。
   parser_max_size: 20
   parser_duration_maximum: 120
+  # 下载媒体时验证 TLS 证书；仅当 CDN 证书不兼容时才设为 false（会削弱传输安全）。
+  parser_verify_ssl: true
   # 禁用的平台列表。核心部署默认关闭需境外网络或登录态的平台。
   parser_disabled_platforms: [youtube, tiktok, twitter, nga]
   # 是否以合并转发消息发送媒体内容。

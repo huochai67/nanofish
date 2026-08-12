@@ -1,8 +1,9 @@
 import asyncio
+import tempfile
+import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from pathlib import Path
-from collections import defaultdict
 
 import yt_dlp
 from msgspec import Struct, convert
@@ -11,7 +12,7 @@ from yt_dlp.utils import DownloadError
 from src.proxy import get_http_proxy_from_env
 
 from .task import auto_task
-from ..utils import LimitedSizeDict, generate_file_name
+from ..utils import LimitedSizeDict, generate_file_name, valid_cached_file
 from ..config import pconfig
 from ..exception import IgnoreException, ParseException, TipException
 
@@ -70,10 +71,20 @@ class YtdlpDownloader:
             "js_runtimes": {"node": {}},
         }
         self._download_base_opts: _Params = {"js_runtimes": {"node": {}}}
-        self._url_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        self._url_locks: weakref.WeakValueDictionary[str, asyncio.Lock] = (
+            weakref.WeakValueDictionary()
+        )
         if proxy := get_http_proxy_from_env():
             self._download_base_opts["proxy"] = proxy
             self._extract_base_opts["proxy"] = proxy
+
+    def _get_url_lock(self, url: str) -> asyncio.Lock:
+        """按 URL 获取下载锁; 同步查找/创建/存储, 不持有强引用"""
+        lock = self._url_locks.get(url)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._url_locks[url] = lock
+        return lock
 
     @staticmethod
     async def _run_ytdlp(func, *args, **kwargs):
@@ -147,32 +158,38 @@ class YtdlpDownloader:
             raise IgnoreException
 
         video_path = pconfig.cache_dir / generate_file_name(url, ".mp4")
-        if video_path.exists():
+        if await valid_cached_file(video_path):
             return video_path
 
-        async with self._url_locks[url]:
-            if video_path.exists():
+        async with self._get_url_lock(url):
+            if await valid_cached_file(video_path):
                 return video_path
 
             pconfig.cache_dir.mkdir(parents=True, exist_ok=True)
 
             ydl_opts = self._download_base_opts.copy()
-            ydl_opts["outtmpl"] = str(video_path)
-            ydl_opts["merge_output_format"] = "mp4"
-            ydl_opts["format"] = f"bv[filesize<={duration // 10 + 10}M]+ba/b[filesize<={duration // 8 + 10}M]"
-            ydl_opts["postprocessors"] = [{"key": "FFmpegVideoConvertor", "preferedformat": "mp4"}]
-
             if cookiefile:
                 ydl_opts["cookiefile"] = str(cookiefile)
 
-            try:
+            with tempfile.TemporaryDirectory(
+                dir=pconfig.cache_dir, prefix=f".{video_path.name}."
+            ) as attempt_dir:
+                attempt_path = Path(attempt_dir) / video_path.name
+                ydl_opts["outtmpl"] = str(attempt_path)
+                ydl_opts["merge_output_format"] = "mp4"
+                ydl_opts["format"] = f"bv[filesize<={duration // 10 + 10}M]+ba/b[filesize<={duration // 8 + 10}M]"
+                ydl_opts["postprocessors"] = [{"key": "FFmpegVideoConvertor", "preferedformat": "mp4"}]
+
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     await self._run_ytdlp(ydl.download, [url])
-            except Exception:
-                if video_path.exists():
-                    return video_path
-                raise
-        return video_path
+
+                if not attempt_path.is_file() or attempt_path.stat().st_size == 0:
+                    raise ParseException("视频转换失败")
+                if attempt_path.stat().st_size > pconfig.max_size * 1024 * 1024:
+                    raise IgnoreException(f"视频大小超过 {pconfig.max_size} MB")
+                attempt_path.replace(video_path)
+
+            return video_path
 
     @auto_task
     async def download_audio(
@@ -188,39 +205,40 @@ class YtdlpDownloader:
 
         file_name = generate_file_name(url)
         audio_path = pconfig.cache_dir / f"{file_name}.flac"
-        if audio_path.exists():
+        if await valid_cached_file(audio_path):
             return audio_path
 
-        async with self._url_locks[url]:
-            if audio_path.exists():
+        async with self._get_url_lock(url):
+            if await valid_cached_file(audio_path):
                 return audio_path
 
             pconfig.cache_dir.mkdir(parents=True, exist_ok=True)
 
             ydl_opts = self._download_base_opts.copy()
-            ydl_opts["outtmpl"] = f"{pconfig.cache_dir / file_name}.%(ext)s"
-            ydl_opts["format"] = "bestaudio/best"
-            ydl_opts["postprocessors"] = [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "flac",
-                    "preferredquality": "0",
-                }
-            ]
-
             if cookiefile:
                 ydl_opts["cookiefile"] = str(cookiefile)
-            try:
+
+            with tempfile.TemporaryDirectory(
+                dir=pconfig.cache_dir, prefix=f".{audio_path.name}."
+            ) as attempt_dir:
+                ydl_opts["outtmpl"] = str(Path(attempt_dir) / f"{file_name}.%(ext)s")
+                ydl_opts["format"] = "bestaudio/best"
+                ydl_opts["postprocessors"] = [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "flac",
+                        "preferredquality": "0",
+                    }
+                ]
+
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     await self._run_ytdlp(ydl.download, [url])
-            except Exception:
-                if audio_path.exists():
-                    return audio_path
-                raise
 
-            if not audio_path.is_file():
-                raise ParseException("音频转换失败")
-            if audio_path.stat().st_size > pconfig.max_size * 1024 * 1024:
-                audio_path.unlink(missing_ok=True)
-                raise IgnoreException(f"音频大小超过 {pconfig.max_size} MB")
-        return audio_path
+                flac_path = Path(attempt_dir) / f"{file_name}.flac"
+                if not flac_path.is_file() or flac_path.stat().st_size == 0:
+                    raise ParseException("音频转换失败")
+                if flac_path.stat().st_size > pconfig.max_size * 1024 * 1024:
+                    raise IgnoreException(f"音频大小超过 {pconfig.max_size} MB")
+                flac_path.replace(audio_path)
+
+            return audio_path
