@@ -187,8 +187,7 @@ async def _media_messages(  # noqa: C901, PLR0912
                 if video.gif_path and (gif_path := await video.gif_path.safe_get()):
                     mergeable_segs.append(UniHelper.img_seg(gif_path))
                 else:
-                    thumbnail = await video.cover.safe_get() if video.cover else None
-                    yield UniMessage(UniHelper.video_seg(path, thumbnail))
+                    yield UniMessage(UniHelper.video_seg(path))
             case AudioContent():
                 yield UniMessage(UniHelper.record_seg(path))
             case ImageContent():

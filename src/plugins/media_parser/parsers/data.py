@@ -37,8 +37,8 @@ class AudioContent(MediaContent):
 class VideoContent(MediaContent):
     """视频内容"""
 
-    cover: PathTask | None = None
-    """视频封面"""
+    cover: str | None = None
+    """视频封面 URL"""
     duration: float | None = None
     """时长 单位: 秒"""
     is_gif: bool = False
@@ -194,7 +194,7 @@ class ParseResult:
     @property
     def all_grid_images(self):
         """获取所有用于渲染图片网格的图片（视频封面 + 图片）"""
-        covers: list[PathTask] = []
+        covers: list[str | PathTask] = []
         for cont in self.contents:
             if isinstance(cont, VideoContent):
                 if cont.cover is not None:
@@ -221,9 +221,7 @@ class ParseResult:
             if not img_only or isinstance(cont, ImageContent):
                 yield cont.path_task.get()
 
-            if isinstance(cont, VideoContent) and cont.cover:
-                yield cont.cover.get()
-            elif isinstance(cont, AudioContent) and cont.cover:
+            if isinstance(cont, AudioContent) and cont.cover:
                 yield cont.cover.get()
 
         for gra in self.graphics:

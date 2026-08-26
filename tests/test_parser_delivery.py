@@ -7,6 +7,7 @@ from pytest import MonkeyPatch
 
 from src.plugins.media_parser import delivery
 from src.plugins.media_parser.delivery import _normalize_image_url, _result_data
+from src.plugins.media_parser.parsers.base import BaseParser
 from src.plugins.media_parser.parsers.data import (
     AudioContent,
     Author,
@@ -25,6 +26,33 @@ async def _unused_path() -> Path:
 
 def _image_task(source_url: str | None = None) -> PathTask:
     return PathTask(_unused_path(), source_url=source_url)
+
+
+def test_parser_passes_avatar_and_video_cover_urls_without_downloading(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    def unexpected_download(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("avatar and video cover must not be downloaded")
+
+    monkeypatch.setattr(
+        "src.plugins.media_parser.parsers.base.downloader.download_img",
+        unexpected_download,
+    )
+
+    async def create_media() -> None:
+        parser = BaseParser()
+        avatar = "https://cdn.example.com/avatar.jpg"
+        poster = "https://cdn.example.com/poster.jpg"
+        video_task = asyncio.create_task(_unused_path())
+
+        author = parser.create_author("Author", avatar)
+        video = parser.create_video(video_task, cover_url=poster)
+
+        assert author.avatar == avatar
+        assert video.cover == poster
+        assert await video.get_path() == Path("unused-image.jpg")
+
+    asyncio.run(create_media())
 
 
 def test_delivery_serializes_post_payload() -> None:
@@ -90,7 +118,7 @@ def test_delivery_serializes_remote_image_urls_without_base64() -> None:
             ),
             contents=[
                 ImageContent(_image_task(image)),
-                VideoContent(_image_task(), cover=_image_task(poster)),
+                VideoContent(_image_task(), cover=poster),
             ],
             graphics=[ImageContent(_image_task(graphic))],
         )
@@ -142,7 +170,7 @@ def test_delivery_omits_images_without_https_source_url() -> None:
             author=Author(name="Author", avatar="http://cdn.example.com/avatar.jpg"),
             contents=[
                 ImageContent(_image_task("http://cdn.example.com/image.jpg")),
-                VideoContent(_image_task(), cover=_image_task()),
+                VideoContent(_image_task(), cover="http://cdn.example.com/poster.jpg"),
             ],
             graphics=[ImageContent(_image_task())],
         )
