@@ -111,6 +111,7 @@ _ACL_PLUGIN_FIELDS = {
     "genai": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
     "eh": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
     "imgsearch": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
+    "agent": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
     "parser": {"permission"},
     "health": {"permission"},
     "auth": {"permission"},
@@ -195,6 +196,10 @@ class Config(BaseModel):
         default=Role.USER,
         description="/imgsearch 最低角色",
     )
+    acl_perm_agent: RoleField = Field(
+        default=Role.USER,
+        description="/agent 最低角色",
+    )
     acl_perm_parser: RoleField = Field(
         default=Role.USER,
         description="链接解析与 /bm 最低角色",
@@ -224,6 +229,11 @@ class Config(BaseModel):
         ge=0,
         description="/imgsearch 日配额",
     )
+    acl_quota_agent_daily: NonNegIntField = Field(
+        default=20,
+        ge=0,
+        description="/agent 日配额",
+    )
     acl_rate_limit_genai_per_minute: NonNegIntField = Field(
         default=0,
         ge=0,
@@ -238,6 +248,11 @@ class Config(BaseModel):
         default=0,
         ge=0,
         description="/imgsearch 滚动每分钟请求上限；0 表示不限制",
+    )
+    acl_rate_limit_agent_per_minute: NonNegIntField = Field(
+        default=0,
+        ge=0,
+        description="/agent 滚动每分钟请求上限；0 表示不限制",
     )
 
     # Cooldown seconds (0 = none)
@@ -255,4 +270,9 @@ class Config(BaseModel):
         default=10.0,
         ge=0,
         description="/imgsearch 冷却秒",
+    )
+    acl_cooldown_agent: NonNegFloatField = Field(
+        default=10.0,
+        ge=0,
+        description="/agent 冷却秒",
     )

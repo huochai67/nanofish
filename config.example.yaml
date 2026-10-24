@@ -28,6 +28,11 @@ acl:
       quota_daily: 20
       rate_limit_per_minute: 0
       cooldown: 10
+    - name: agent
+      permission: user
+      quota_daily: 20
+      rate_limit_per_minute: 0
+      cooldown: 10
     - name: parser
       permission: user
     - name: health
@@ -99,3 +104,27 @@ imgsearch:
   imgsearch_saucenao_api_key: ""
   # Soutubot 搜索灵敏度系数。
   imgsearch_soutubot_factor: 1.2
+
+# Hermes Agent 插件。API Key 只写入本地 config.yaml。
+agent:
+  # Hermes Gateway 地址；profile 会走 /p/<profile> 前缀。
+  agent_endpoint: http://hermes-agent:8642
+  # 默认 profile 的 API Key。
+  agent_api_key: ""
+  # 未指定 @profile 时使用的 profile；空或 default 表示默认 profile。
+  agent_default_profile: ""
+  # 命名 profile 的独立 API Key；Hermes 的命名 profile 不会继承默认 Key。
+  agent_profiles: {}
+  # 单轮请求、同会话排队、QQ 分段与引用内容的限制。
+  agent_timeout: 300
+  agent_lock_timeout: 30
+  agent_outgoing_max_chars: 1800
+  agent_reference_max_chars: 12000
+  agent_file_max_bytes: 8388608
+  agent_image_max_bytes: 4194304
+  agent_max_attachments: 4
+  # 可选：把二进制附件写入一个 Hermes 也能看到的共享目录。
+  agent_upload_dir: ""
+  agent_remote_upload_dir: ""
+  # 可选：消息与会话映射数据库；空表示使用 localstore。
+  agent_db_path: ""

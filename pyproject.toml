@@ -122,6 +122,8 @@ keep-runtime-typing = true
 [tool.ruff.lint.per-file-ignores]
 # nonebot DI annotations must stay at runtime; auth handlers are branchy by design
 "src/plugins/acl/**" = ["TC001", "TC002", "C901", "PLR0911", "PLR0912", "PLR0915"]
+# the /agent handler owns the full command flow; extraction helpers live in reference.py
+"src/plugins/hermes_agent/**" = ["C901", "PLR0912", "PLR0915"]
 
 [tool.pyright]
 # For Pylance/Pyright configurations, see https://microsoft.github.io/pyright/#/configuration.

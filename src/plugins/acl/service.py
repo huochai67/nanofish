@@ -35,6 +35,11 @@ _QUOTA_COMMANDS: dict[str, tuple[str, str, str]] = {
         "acl_cooldown_imgsearch",
         "acl_rate_limit_imgsearch_per_minute",
     ),
+    "agent": (
+        "acl_quota_agent_daily",
+        "acl_cooldown_agent",
+        "acl_rate_limit_agent_per_minute",
+    ),
 }
 
 
@@ -120,6 +125,7 @@ def perm_for_command(command: str) -> Role:
         "genai": config.acl_perm_genai,
         "eh": config.acl_perm_eh,
         "imgsearch": config.acl_perm_imgsearch,
+        "agent": config.acl_perm_agent,
         "parser": config.acl_perm_parser,
         "health": config.acl_perm_health,
         "auth": config.acl_perm_auth,

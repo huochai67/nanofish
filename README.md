@@ -21,6 +21,7 @@ docker/          # 容器启动脚本
 | `genai_detect` | `/genai` | 自动验证所有接收图片的内嵌可信 C2PA 凭证（需 `c2pa` extra，缺失时跳过）；`/genai` 使用 Sightengine 检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |
+| `hermes_agent` | `/agent [@profile] <消息>` 或引用机器人回复后直接发送 | Hermes Agent 会话；引用机器人回复可续聊，引用其他消息/文件作为上下文，SQLite 记录 QQ 消息与会话关系 |
 | `media_parser` | 自动解析支持平台链接、`/bm` | 前端主题卡片预览与媒体回传；支持 YouTube Music、Spotify、网易云音乐、QQ 音乐，受授权、登录、地区或 DRM 限制的歌曲仅返回卡片（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
 | `utils` | — | 共享消息解析工具 |
 
@@ -33,7 +34,7 @@ docker/          # 容器启动脚本
 | 默认门槛 | 命令 |
 |----------|------|
 | guest | `/jrrp` |
-| user | `/genai`、`/imgsearch`、链接解析、`/bm` |
+| user | `/genai`、`/imgsearch`、`/agent`、链接解析、`/bm` |
 | admin | `/eh`、`/auth` 管理子命令 |
 | superuser | `/health` |
 
@@ -62,6 +63,28 @@ docker/          # 容器启动脚本
 /auth ban|unban <qq|@>
 /auth group enable|disable|reset [群号]
 ```
+
+### Hermes Agent（`/agent`）
+
+`/agent [@profile] <消息>` 调用 Hermes Gateway 的 session API：
+
+- `@profile` 可选；命名 profile 走 `/p/<profile>` 前缀，且 Hermes 要求该 profile 有自己的 `API_SERVER_KEY`，需在 `agent.agent_profiles` 中配置同一把 Key。
+- 引用**机器人上一轮最终输出**后直接发送内容即可继续原 Hermes 会话，无需 `/agent`；用 `/agent` 引用同一会话输出也会继续，且该引用不会写入 `<reference>`（会话已有历史）。直接发送 `/agent` 或引用其他消息会新建会话。判断依据是 SQLite 中 `(bot_id, message_id) -> session_id` 的映射。
+- 引用其他消息的文本会包进 `<reference>…</reference>` 块放到 prompt 头部。当前消息和引用消息中的图片都会作为 `image_url` 传入；文本文件在 `agent_reference_max_chars` 预算内内联，超出预算时不截断、改为提供下载地址；其他文件提供原始下载地址，配置共享目录后还会写入 Hermes 可见路径。
+- 只回传 Hermes 每轮的最终文本，不回传思考、reasoning 或 tool call；长回复按 `agent_outgoing_max_chars` 分段发送。
+- 同一 Hermes 会话的并发请求会排队；超过 `agent_lock_timeout` 返回繁忙提示。
+
+最小配置（写入本地 `config.yaml`）：
+
+```yaml
+agent:
+  agent_endpoint: http://hermes-agent:8642
+  agent_api_key: "<默认 profile 的 API Key>"
+  agent_profiles:
+    test-bot: "<该 profile 的 API Key>"
+```
+
+`agent.agent_db_path` 留空时使用 localstore。二进制附件如需让 Hermes 直接读取，配置 `agent_upload_dir`（本机路径）和 `agent_remote_upload_dir`（Hermes 容器内路径），两者应指向同一个共享卷。
 
 ## 快速开始
 
@@ -124,6 +147,7 @@ docker compose up -d --build
 | `sightengine_api_user` / `sightengine_api_secret` / `c2pa_*` | `config.yaml` 中的 AI 图检测凭证和内嵌 C2PA 校验限制 |
 | `eh_ipb_*` / `eh_sk` / `eh_igneous` | `config.yaml` 中的 ExHentai cookie |
 | `imgsearch_*` | `config.yaml` 中的反向搜图上游参数 |
+| `agent_*` | `config.yaml` 中的 Hermes 地址、API Key、profile Key、超时、附件与会话映射数据库配置 |
 | `PROXY` | 可选代理，应用于后端外部请求及 Playwright 截图页面（兼容读取 `HTTP_PROXY` / `HTTPS_PROXY`） |
 | `NO_PROXY` | 代理排除列表（兼容 `no_proxy`）；支持域名、子域名、IP/CIDR、端口和 `*`，并传递给 Playwright |
 | `FLARESOLVERR_URL` | FlareSolverr API 地址；Compose 默认 `http://flaresolverr:8191/v1`，设为空可禁用 |
