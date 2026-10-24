@@ -13,16 +13,6 @@ acl:
   plugins:
     - name: jrrp
       permission: guest
-    - name: llm
-      permission: user
-      quota_daily: 10
-      rate_limit_per_minute: 0
-      cooldown: 30
-    - name: draw
-      permission: user
-      quota_daily: 5
-      rate_limit_per_minute: 0
-      cooldown: 60
     - name: genai
       permission: user
       quota_daily: 20
@@ -79,45 +69,6 @@ media_parser:
 health:
   # 前端 HTTP 探测超时，单位为秒。
   health_http_timeout: 5.0
-
-# LLM 插件（对话与生图/编辑）。API Key 仅填写本地 config.yaml。
-llm:
-  # OpenAI 兼容的对话模型、密钥和 API 根路径。
-  model: gpt-4o-mini
-  openai_api_key: sk-xxx
-  openai_api_base: https://api.openai.com/v1
-  # 默认生图档案；必须对应 image_models 中的别名。
-  image_default_model: openai
-  image_models:
-    openai:
-      # OpenAI 原生 Images API 后端：只接受 size 与 response_format。
-      backend: openai
-      model: gpt-image-1
-      api_key: sk-xxx
-      api_base: https://api.openai.com/v1
-      size: 1024x1024
-      response_format: b64_json
-      timeout: 120
-    grok:
-      # xAI 原生 JSON Images API 后端：最多 3 张参考图，不接受 size。
-      backend: grok
-      model: grok-imagine-image-quality
-      api_key: xai-xxx
-      api_base: https://api.x.ai/v1
-      aspect_ratio: "1:1"
-      resolution: 1k
-      response_format: b64_json
-      timeout: 120
-    gemini:
-      # Google Gemini Interactions API 后端：store: false 无状态单回合，
-      # 最多 14 张参考图，不接受 size；始终以内联 base64 返回图片。
-      backend: gemini
-      model: gemini-3.1-flash-image
-      api_key: gemini-xxx
-      api_base: https://generativelanguage.googleapis.com/v1beta
-      aspect_ratio: "1:1"
-      resolution: 1K
-      timeout: 120
 
 # AI 图检测插件。凭证从 Sightengine 控制台获取。
 genai_detect:

@@ -12,12 +12,10 @@ import {
   ExternalLink,
   Fish,
   Link2,
-  MessageSquare,
   Search,
 } from "lucide-react";
 import { Card, Content, PageHeader, PageShell } from "./components/chrome";
 import { encodeUrlData } from "./utils/url-data";
-import { MockChatData } from "./chat/types";
 import { MockEhData } from "./eh/types";
 import { MockImageSearchData } from "./imgsearch/types";
 import { MockParserData } from "./parser/types";
@@ -41,18 +39,6 @@ type PageEntry = {
 };
 
 const PAGES: PageEntry[] = [
-  {
-    href: "/chat",
-    title: "Chat Viewer",
-    description:
-      "多模态对话截图页。支持文本 / 图片 / 文件消息，供 /llm 等结果回传。",
-    injectKey: "__CHAT_DATA__",
-    icon: <MessageSquare size={20} />,
-    accent: "bg-indigo-600 shadow-indigo-600/25",
-    chipSoft: "bg-indigo-50 text-indigo-700",
-    mockSummary: `${MockChatData.messages.length} 条消息 · title: ${MockChatData.title ?? "(无)"}`,
-    mockPreview: MockChatData,
-  },
   {
     href: "/eh",
     title: "EH 搜索结果",
@@ -99,7 +85,7 @@ const GUIDE: { icon: ReactNode; lead: string; body: ReactNode }[] = [
       <>
         导航前写入{" "}
         <code className="rounded bg-zinc-100 px-1 py-px font-mono text-[11px] text-zinc-700">
-          window.__CHAT_DATA__
+          window.__EH_DATA__
         </code>{" "}
         等全局变量，键名见各卡片 inject 标注
       </>

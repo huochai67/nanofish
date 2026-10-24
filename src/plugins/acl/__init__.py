@@ -55,7 +55,7 @@ logger.info(
     f"(admins={list(config.acl_admins)}, "
     f"groups={_groups or 'all'}, "
     f"private={config.acl_allow_private}, "
-    f"perm_llm={config.acl_perm_llm.label()}, "
+    f"perm_genai={config.acl_perm_genai.label()}, "
     f"perm_eh={config.acl_perm_eh.label()})"
 )
 

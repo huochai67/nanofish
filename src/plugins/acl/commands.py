@@ -69,7 +69,7 @@ async def cmd_whoami(matcher: Matcher, event: MessageEvent) -> None:
         f"范围: {'允许' if scope_ok else '拒绝'}"
         + (f"（群 {gid}）" if gid is not None else "（私聊）"),
     ]
-    for cmd in ("llm", "draw", "genai", "eh", "imgsearch"):
+    for cmd in ("genai", "eh", "imgsearch"):
         q = check_quota(event, cmd)
         if q.limit > 0:
             lines.append(f"/{cmd} 今日 {q.used}/{q.limit}")
@@ -79,10 +79,10 @@ async def cmd_whoami(matcher: Matcher, event: MessageEvent) -> None:
 
 
 async def cmd_quota(matcher: Matcher, event: MessageEvent, rest: list[str]) -> None:
-    cmd = rest[0].lower() if rest else "llm"
-    if cmd not in {"llm", "draw", "genai", "eh", "imgsearch"}:
+    cmd = rest[0].lower() if rest else "genai"
+    if cmd not in {"genai", "eh", "imgsearch"}:
         await matcher.finish(
-            reply_to_event(event, "用法: /auth quota [llm|draw|genai|eh|imgsearch]")
+            reply_to_event(event, "用法: /auth quota [genai|eh|imgsearch]")
         )
         return
     q = check_quota(event, cmd)
@@ -101,7 +101,7 @@ async def cmd_help(matcher: Matcher, event: MessageEvent) -> None:
             event,
             "用法:\n"
             "/auth whoami\n"
-            "/auth quota [llm|draw|genai|eh|imgsearch]\n"
+            "/auth quota [genai|eh|imgsearch]\n"
             "/auth list\n"
             "/auth set <qq|@> <guest|user|admin>\n"
             "/auth unset <qq|@>\n"
@@ -148,15 +148,13 @@ async def cmd_list(matcher: Matcher, event: MessageEvent, config: Config) -> Non
     lines.append(f"私聊: {'允许' if config.acl_allow_private else '拒绝'}")
     rate_limits = ", ".join(
         f"{command}={getattr(config, f'acl_rate_limit_{command}_per_minute')}/分钟"
-        for command in ("llm", "draw", "genai", "eh", "imgsearch")
+        for command in ("genai", "eh", "imgsearch")
     )
     lines.append(f"高成本命令每分钟限流: {rate_limits}")
     perms = ", ".join(
         f"{c}={perm_for_command(c).label()}"
         for c in (
             "jrrp",
-            "llm",
-            "draw",
             "genai",
             "eh",
             "imgsearch",

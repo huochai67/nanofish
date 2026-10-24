@@ -108,8 +108,6 @@ NonNegFloatField = Annotated[float, BeforeValidator(_parse_nonneg_float)]
 
 _ACL_PLUGIN_FIELDS = {
     "jrrp": {"permission"},
-    "llm": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
-    "draw": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
     "genai": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
     "eh": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
     "imgsearch": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
@@ -191,8 +189,6 @@ class Config(BaseModel):
 
     # Min role per command
     acl_perm_jrrp: RoleField = Field(default=Role.GUEST, description="/jrrp 最低角色")
-    acl_perm_llm: RoleField = Field(default=Role.USER, description="/llm 最低角色")
-    acl_perm_draw: RoleField = Field(default=Role.USER, description="/draw 最低角色")
     acl_perm_genai: RoleField = Field(default=Role.USER, description="/genai 最低角色")
     acl_perm_eh: RoleField = Field(default=Role.ADMIN, description="/eh 最低角色")
     acl_perm_imgsearch: RoleField = Field(
@@ -213,16 +209,6 @@ class Config(BaseModel):
     )
 
     # Quotas (0 = unlimited)
-    acl_quota_llm_daily: NonNegIntField = Field(
-        default=10,
-        ge=0,
-        description="/llm 日配额",
-    )
-    acl_quota_draw_daily: NonNegIntField = Field(
-        default=5,
-        ge=0,
-        description="/draw 日配额",
-    )
     acl_quota_genai_daily: NonNegIntField = Field(
         default=20,
         ge=0,
@@ -237,16 +223,6 @@ class Config(BaseModel):
         default=20,
         ge=0,
         description="/imgsearch 日配额",
-    )
-    acl_rate_limit_llm_per_minute: NonNegIntField = Field(
-        default=0,
-        ge=0,
-        description="/llm 滚动每分钟请求上限；0 表示不限制",
-    )
-    acl_rate_limit_draw_per_minute: NonNegIntField = Field(
-        default=0,
-        ge=0,
-        description="/draw 滚动每分钟请求上限；0 表示不限制",
     )
     acl_rate_limit_genai_per_minute: NonNegIntField = Field(
         default=0,
@@ -265,16 +241,6 @@ class Config(BaseModel):
     )
 
     # Cooldown seconds (0 = none)
-    acl_cooldown_llm: NonNegFloatField = Field(
-        default=30.0,
-        ge=0,
-        description="/llm 冷却秒",
-    )
-    acl_cooldown_draw: NonNegFloatField = Field(
-        default=60.0,
-        ge=0,
-        description="/draw 冷却秒",
-    )
     acl_cooldown_genai: NonNegFloatField = Field(
         default=10.0,
         ge=0,

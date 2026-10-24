@@ -1,12 +1,12 @@
 # nanofish
 
-基于 [NoneBot2](https://nonebot.dev/) 的 QQ 机器人（OneBot V11），附带 Next.js 前端用于渲染对话截图。
+基于 [NoneBot2](https://nonebot.dev/) 的 QQ 机器人（OneBot V11），附带 Next.js 前端用于渲染结果截图。
 
 ## 结构
 
 ```
 src/plugins/     # NoneBot 插件
-app/             # Next.js 前端（聊天页截图）
+app/             # Next.js 前端（截图页）
 docker/          # 容器启动脚本
 ```
 
@@ -15,8 +15,7 @@ docker/          # 容器启动脚本
 | 插件 | 命令 | 说明 |
 |------|------|------|
 | `acl` | `/auth` | 角色权限、群范围、日配额/冷却、每命令限流、运行时授权 |
-| `llm` | `/llm <内容>`、`/draw [@模型] <描述>` | 多模态对话（截图回传）；多档案文生图/图生图，档案级 OpenAI、Grok、Gemini 原生后端（默认 user + 日配额） |
-| `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入；`browser` extra，缺失时链接解析回退文字卡片） |
+| `app` | — | Playwright 截图（长驻 browser + context，页面数据 page 注入；`browser` extra，缺失时链接解析回退文字卡片） |
 | `ehsearch` | `/eh <书名>` 或回复后 `/eh` | E-Hentai 搜索，结果 HTML 截图回传（默认 admin + 配额） |
 | `imgsearch` | `/imgsearch` | 回复或附带图片反向搜索 SauceNAO；可选 Soutubot（默认 user + 配额） |
 | `genai_detect` | `/genai` | 自动验证所有接收图片的内嵌可信 C2PA 凭证（需 `c2pa` extra，缺失时跳过）；`/genai` 使用 Sightengine 检测（默认 user + 配额） |
@@ -24,8 +23,6 @@ docker/          # 容器启动脚本
 | `health` | `/health` | 深度健康检查（默认 superuser） |
 | `media_parser` | 自动解析支持平台链接、`/bm` | 前端主题卡片预览与媒体回传；支持 YouTube Music、Spotify、网易云音乐、QQ 音乐，受授权、登录、地区或 DRM 限制的歌曲仅返回卡片（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
 | `utils` | — | 共享消息解析工具 |
-
-`/draw` 的 `@模型` 选择 `image_models` 中的档案；省略时使用 `image_default_model`。回复消息和当前消息中的图片会作为参考图。每个档案显式声明原生后端 `backend`（`openai` / `grok` / `gemini`）：OpenAI 走 Images API（`size` / `response_format`），Grok 走 JSON Images API（`aspect_ratio` / `resolution` / `response_format`，最多 3 张参考图），Gemini 走 Interactions API（`aspect_ratio` / `resolution`，最多 14 张参考图）。Gemini 请求使用无状态 `store: false`，不会开启服务端多轮编辑状态。
 
 ### 权限（acl）
 
@@ -36,7 +33,7 @@ docker/          # 容器启动脚本
 | 默认门槛 | 命令 |
 |----------|------|
 | guest | `/jrrp` |
-| user | `/llm`、`/draw`、`/genai`、`/imgsearch`、链接解析、`/bm` |
+| user | `/genai`、`/imgsearch`、链接解析、`/bm` |
 | admin | `/eh`、`/auth` 管理子命令 |
 | superuser | `/health` |
 
@@ -48,8 +45,6 @@ docker/          # 容器启动脚本
 
 配额（superuser 不限）：
 
-- `/llm` 默认 10 次/日、冷却 30s
-- `/draw` 默认 5 次/日、冷却 60s
 - `/genai` 默认 20 次/日、冷却 10s
 - `/eh` 默认 20 次/日、冷却 10s
 - `/imgsearch` 默认 20 次/日、冷却 10s
@@ -126,8 +121,6 @@ docker compose up -d --build
 | `acl_*` | `config.yaml` 中的权限、群白名单与配额 |
 | `parser_*` | `config.yaml` 中的链接解析媒体限制、平台禁用、可选 cookie/代理 |
 | `APP_API_BASE` | 前端 base URL |
-| `model` / `openai_api_key` / `openai_api_base` | `config.yaml` 中的 LLM 对话参数 |
-| `image_default_model` / `image_models` | `config.yaml` 中的 `/draw` 默认档案与档案映射；默认别名必须存在。`backend` 取 `openai` / `grok` / `gemini` 之一；每个档案独立配置 `api_key`、`api_base` 与通用 `timeout`。适用字段按后端严格区分：OpenAI 用 `size` / `response_format`，Grok 用 `aspect_ratio` / `resolution` / `response_format`（仅 `b64_json` / `url`），Gemini 用 `aspect_ratio` / `resolution` |
 | `sightengine_api_user` / `sightengine_api_secret` / `c2pa_*` | `config.yaml` 中的 AI 图检测凭证和内嵌 C2PA 校验限制 |
 | `eh_ipb_*` / `eh_sk` / `eh_igneous` | `config.yaml` 中的 ExHentai cookie |
 | `imgsearch_*` | `config.yaml` 中的反向搜图上游参数 |

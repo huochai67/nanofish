@@ -20,16 +20,6 @@ from .store import acl_store
 config: Config = get_yaml_plugin_config(Config, "acl")
 
 _QUOTA_COMMANDS: dict[str, tuple[str, str, str]] = {
-    "llm": (
-        "acl_quota_llm_daily",
-        "acl_cooldown_llm",
-        "acl_rate_limit_llm_per_minute",
-    ),
-    "draw": (
-        "acl_quota_draw_daily",
-        "acl_cooldown_draw",
-        "acl_rate_limit_draw_per_minute",
-    ),
     "genai": (
         "acl_quota_genai_daily",
         "acl_cooldown_genai",
@@ -127,8 +117,6 @@ def require_level(min_role: Role | str) -> Permission:
 def perm_for_command(command: str) -> Role:
     mapping = {
         "jrrp": config.acl_perm_jrrp,
-        "llm": config.acl_perm_llm,
-        "draw": config.acl_perm_draw,
         "genai": config.acl_perm_genai,
         "eh": config.acl_perm_eh,
         "imgsearch": config.acl_perm_imgsearch,
