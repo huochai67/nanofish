@@ -3,8 +3,10 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
+from nonebot_plugin_alconna.uniseg import Text
 from pytest import MonkeyPatch
 
+from src.plugins.app import BrowserUnavailableError
 from src.plugins.media_parser import delivery
 from src.plugins.media_parser.delivery import _normalize_image_url, _result_data
 from src.plugins.media_parser.parsers.base import BaseParser
@@ -81,11 +83,12 @@ def test_delivery_serializes_post_payload() -> None:
 
 
 def test_delivery_serializes_music_payload() -> None:
+    duration = 213
     result = ParseResult(
         platform=Platform("spotify", "Spotify"),
         kind="music",
         title="Track title",
-        music=MusicMetadata(artist="Artist", album="Album", duration=213),
+        music=MusicMetadata(artist="Artist", album="Album", duration=duration),
     )
 
     data = asyncio.run(_result_data(result))
@@ -94,7 +97,7 @@ def test_delivery_serializes_music_payload() -> None:
     assert data["title"] == "Track title"
     assert data["artist"] == "Artist"
     assert data["album"] == "Album"
-    assert data["duration"] == 213
+    assert data["duration"] == duration
     assert data["cover"] is None
     assert "media" not in data
     assert "repost" not in data
@@ -229,3 +232,23 @@ def test_delivery_always_appends_urls_to_rendered_reply(
         "rendered card链接: https://x.com/example/status/1\n"
         "原帖: https://x.com/example/status/2"
     )
+
+
+def test_card_falls_back_to_text_without_playwright(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    async def unavailable(_result: ParseResult) -> bytes:
+        raise BrowserUnavailableError("Playwright 未安装")
+
+    monkeypatch.setattr(delivery, "_render_card", unavailable)
+    result = ParseResult(
+        platform=Platform("weibo", "微博"),
+        author=Author(name="作者"),
+        title="标题",
+        text="正文内容",
+    )
+
+    segment = asyncio.run(delivery._card_segment(result))
+
+    assert isinstance(segment, Text)
+    assert segment.text == "【标题】\n作者\n正文内容"

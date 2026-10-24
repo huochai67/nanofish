@@ -40,6 +40,14 @@ class Config(BaseModel):
     """视频/音频最大时长"""
     parser_disabled_platforms: list[PlatformEnum] = []
     """禁止的解析器"""
+    parser_max_concurrency: int = 2
+    """解析队列最大并发任务数"""
+    parser_queue_size: int = 32
+    """解析队列最大等待任务数, 0 表示不限制"""
+    parser_max_retries: int = 2
+    """解析失败后的重试次数"""
+    parser_retry_delay: float = 1.0
+    """首次重试等待秒数, 之后指数退避"""
     parser_bili_video_codes: list[VideoCodecs] = [
         VideoCodecs.AVC,
         VideoCodecs.AV1,
@@ -82,6 +90,26 @@ class Config(BaseModel):
     def disabled_platforms(self) -> list[PlatformEnum]:
         """禁止的解析器"""
         return self.parser_disabled_platforms
+
+    @property
+    def max_concurrency(self) -> int:
+        """解析队列最大并发任务数"""
+        return self.parser_max_concurrency
+
+    @property
+    def queue_size(self) -> int:
+        """解析队列最大等待任务数"""
+        return self.parser_queue_size
+
+    @property
+    def max_retries(self) -> int:
+        """解析失败后的重试次数"""
+        return self.parser_max_retries
+
+    @property
+    def retry_delay(self) -> float:
+        """首次重试等待秒数"""
+        return self.parser_retry_delay
 
     @property
     def bili_video_codes(self) -> list[VideoCodecs]:

@@ -1,20 +1,24 @@
+from __future__ import annotations
+
 import asyncio
 import atexit
 import base64
 import json
 import threading
 import uuid
-from typing import Any, ClassVar, Literal, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 from urllib.parse import urlsplit
 
 from nonebot import get_driver, get_plugin_config, logger
 from nonebot.adapters.onebot.v11.message import Message
 from nonebot.plugin import PluginMetadata
-from playwright.async_api import Browser, BrowserContext, Playwright, async_playwright
 
 from src.proxy import get_http_proxy_from_env, get_no_proxy_from_env
 
 from .config import Config
+
+if TYPE_CHECKING:
+    from playwright.async_api import Browser, BrowserContext, Playwright
 
 __plugin_meta__ = PluginMetadata(
     name="app",
@@ -25,6 +29,10 @@ __plugin_meta__ = PluginMetadata(
 
 config: Config = get_plugin_config(Config)
 _MAX_FRONTEND_DIAGNOSTICS = 20
+
+
+class BrowserUnavailableError(RuntimeError):
+    """Playwright 不可用（未安装或当前平台没有兼容的 wheel）。"""
 
 
 def _proxy_summary(proxy: str) -> str:
@@ -94,6 +102,13 @@ class Client:
                 return self.context
 
             await self._close_unlocked()
+            try:
+                from playwright.async_api import async_playwright
+            except ImportError as error:
+                raise BrowserUnavailableError(
+                    "Playwright 未安装。当前平台可能没有兼容的 wheel；"
+                    "请使用 glibc 环境、Docker 镜像，或安装 browser extra。"
+                ) from error
             playwright = await async_playwright().start()
             proxy = get_http_proxy_from_env()
             bypass = get_no_proxy_from_env() or ""
@@ -195,12 +210,15 @@ class Client:
             )
             page.on(
                 "response",
-                lambda response: add_diagnostic(
-                    f"image response {response.status}: "
-                    f"{response.url.split('?', maxsplit=1)[0]}"
-                )
-                if response.request.resource_type == "image" and response.status >= 400
-                else None,
+                lambda response: (
+                    add_diagnostic(
+                        f"image response {response.status}: "
+                        f"{response.url.split('?', maxsplit=1)[0]}"
+                    )
+                    if response.request.resource_type == "image"
+                    and response.status >= 400  # noqa: PLR2004
+                    else None
+                ),
             )
             # inject before any page JS so React reads data on first mount
             await page.add_init_script(

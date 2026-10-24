@@ -8,7 +8,8 @@ COPY ./pyproject.toml \
   ./uv.lock \
   /wheel/
 
-RUN python -m uv export --format requirements.txt --output-file requirements.txt --no-hashes
+RUN python -m uv export --format requirements.txt --output-file requirements.txt --no-hashes \
+  --extra browser --extra c2pa
 
 RUN python -m pip wheel --wheel-dir=/wheel --no-cache-dir --requirement ./requirements.txt
 

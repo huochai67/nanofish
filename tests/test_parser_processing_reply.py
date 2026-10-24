@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from nonebot.exception import FinishedException
 
-from src.plugins.media_parser.exception import TipException
+from src.plugins.media_parser.exception import ParseException, TipException
 from src.plugins.media_parser.helper import UniHelper
 
 
@@ -69,6 +69,23 @@ def test_processing_reply_quotes_tip_and_retracts(
     assert receipt.recalled
 
 
+def test_processing_reply_quotes_parse_error_and_retracts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent, receipt = _stub_replies(monkeypatch)
+
+    @UniHelper.with_processing_reply
+    async def handler() -> None:
+        raise ParseException("获取视频信息失败")
+
+    assert asyncio.run(handler()) is None
+    assert sent == [
+        "正在解析，请稍候…",
+        "解析失败：获取视频信息失败",
+    ]
+    assert receipt.recalled
+
+
 def test_processing_reply_quotes_unexpected_errors_and_retracts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -79,7 +96,7 @@ def test_processing_reply_quotes_unexpected_errors_and_retracts(
         raise RuntimeError("network failed")
 
     assert asyncio.run(handler()) is None
-    assert sent == ["正在解析，请稍候…", "解析失败，请稍后重试"]
+    assert sent == ["正在解析，请稍候…", "解析失败：network failed"]
     assert receipt.recalled
 
 

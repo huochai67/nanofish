@@ -20,7 +20,7 @@ from nonebot_plugin_alconna.uniseg import (
 )
 
 from .config import pconfig
-from .exception import TipException
+from .exception import ParseException, TipException, format_parse_error
 
 ForwardNodeInner = str | Segment | UniMessage
 """转发消息节点内部允许的类型"""
@@ -129,11 +129,14 @@ class UniHelper:
             except TipException as e:
                 await cls.reply_to_current_event(e.message).send()
                 return None
+            except ParseException as e:
+                await cls.reply_to_current_event(format_parse_error(e)).send()
+                return None
             except FinishedException:
                 raise
-            except Exception:
+            except Exception as e:
                 logger.exception("media parser handling failed")
-                await cls.reply_to_current_event("解析失败，请稍后重试").send()
+                await cls.reply_to_current_event(format_parse_error(e)).send()
                 return None
             finally:
                 try:

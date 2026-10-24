@@ -6,8 +6,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from io import BytesIO
 
-import c2pa
 from nonebot import logger
+
+try:
+    import c2pa
+except ImportError:  # pragma: no cover - 仅在不支持 c2pa-python 的平台触发
+    c2pa = None
 
 _VERIFY_SETTINGS: dict[str, object] = {
     "verify": {
@@ -55,12 +59,19 @@ def _claim_generator(manifest: dict[object, object] | None) -> str | None:
     return None
 
 
+def c2pa_sdk_available() -> bool:
+    return c2pa is not None
+
+
 def inspect_embedded_c2pa(
     image: bytes,
     content_type: str,
     trust_anchors: str | None = None,
 ) -> C2paResult:
     """Verify an image's embedded manifest against the SDK trust store."""
+    if c2pa is None:
+        return C2paResult(C2paStatus.UNSUPPORTED)
+
     try:
         settings = _VERIFY_SETTINGS.copy()
         if trust_anchors:

@@ -28,7 +28,12 @@ from ..utils import (
 )
 from ..config import pconfig
 from ..constants import COMMON_HEADER, DOWNLOAD_TIMEOUT
-from ..exception import IgnoreException, DownloadException
+from ..exception import (
+    DownloadException,
+    IgnoreException,
+    describe_error,
+    is_retryable,
+)
 
 
 class StreamDownloader:
@@ -234,9 +239,12 @@ class StreamDownloader:
                         headers=headers,
                     )
                 temp_path.replace(file_path)
-            except curl_cffi.CurlError:
+            except curl_cffi.CurlError as error:
                 logger.opt(exception=True).warning(f"下载失败(curl_cffi) | url: {url}")
-                raise DownloadException("媒体下载失败")
+                raise DownloadException(
+                    f"媒体下载失败：{describe_error(error)}",
+                    retryable=is_retryable(error),
+                ) from error
             finally:
                 await safe_unlink(temp_path)
 
@@ -400,9 +408,12 @@ class StreamDownloader:
                     raise DownloadException("m3u8 视频下载失败")
 
                 temp_path.replace(video_path)
-            except httpx.HTTPError:
+            except httpx.HTTPError as error:
                 logger.opt(exception=True).warning(f"m3u8 视频下载失败 | url: {m3u8_url}")
-                raise DownloadException("m3u8 视频下载失败")
+                raise DownloadException(
+                    f"m3u8 视频下载失败：{describe_error(error)}",
+                    retryable=is_retryable(error),
+                ) from error
             finally:
                 await safe_unlink(temp_path)
 

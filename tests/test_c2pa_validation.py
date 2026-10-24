@@ -6,6 +6,10 @@ from types import ModuleType
 from typing import Self
 from unittest.mock import patch
 
+import pytest
+
+pytest.importorskip("c2pa")
+
 
 def _load_c2pa_validation() -> ModuleType:
     plugin_dir = Path(__file__).parents[1] / "src/plugins/genai_detect"
@@ -57,6 +61,12 @@ class _Reader:
 
 
 class C2paValidationTests(unittest.TestCase):
+    def test_missing_sdk_returns_unsupported(self) -> None:
+        with patch.object(c2pa_validation, "c2pa", None):
+            result = c2pa_validation.inspect_embedded_c2pa(b"image", "image/jpeg")
+
+        self.assertEqual(result.status, c2pa_validation.C2paStatus.UNSUPPORTED)
+
     def test_trusted_manifest_uses_claim_generator(self) -> None:
         reader = _Reader("Trusted", {"claim_generator": "Adobe Photoshop"})
         with (

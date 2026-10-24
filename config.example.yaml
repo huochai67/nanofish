@@ -67,6 +67,13 @@ media_parser:
   parser_disabled_platforms: [youtube, tiktok, twitter, nga]
   # 是否以合并转发消息发送媒体内容。
   parser_need_forward_contents: true
+  # 解析任务队列：限制同时处理的任务数，避免短时间大量并发。
+  parser_max_concurrency: 2
+  # 等待队列长度，0 表示不限制。
+  parser_queue_size: 32
+  # 临时性错误（网络超时/5xx/风控等）的重试次数与首次重试等待秒数（之后指数退避）。
+  parser_max_retries: 2
+  parser_retry_delay: 1.0
 
 # 健康检查插件
 health:

@@ -1,15 +1,19 @@
 import re
-from typing import TypeVar
+from dataclasses import dataclass
+from typing import Any, TypeVar
 
 from nonebot import get_driver, logger, on_command
 from nonebot.adapters import Message
+from nonebot.exception import MatcherException
 from nonebot.params import CommandArg
 from nonebot_plugin_alconna.uniseg import File, Video, Voice
 
 from ..config import pconfig
-from ..delivery import deliver_parse_result
+from ..delivery import collect_parse_messages
+from ..exception import DeliveryFailure, ParseException, TipException, format_parse_error
 from ..helper import UniHelper, UniMessage
 from ..parsers import BaseParser, BilibiliParser, ParseResult
+from ..queue import parser_queue
 from ..utils import LimitedSizeDict
 from .rule import Searched, SearchResult, on_keyword_regex
 
@@ -65,32 +69,71 @@ def clear_result_cache() -> None:
     _RESULT_CACHE.clear()
 
 
-@UniHelper.with_processing_reply
-async def parser_handler(
-    sr: SearchResult = Searched(),
-) -> None:
-    """统一的解析处理器"""
-    # 1. 获取缓存结果
-    cache_key = sr.searched.group(0)
-    result = _RESULT_CACHE.get(cache_key)
+@dataclass(slots=True)
+class _PreparedParse:
+    result: ParseResult
+    messages: list[UniMessage[Any]]
 
-    if result is None:
-        # 2. 获取对应平台 parser
-        parser = get_parser(sr.keyword)
-        result = await parser.parse(sr.keyword, sr.searched)
-        logger.debug(f"解析结果: {result}")
-    else:
-        logger.debug(f"命中缓存: {cache_key}, 结果: {result}")
 
-    # 3. 渲染内容消息并发送
-    async for message in deliver_parse_result(result):
+async def _send_messages(messages: list[UniMessage[Any]]) -> None:
+    for message in messages:
         if message.has(Video) or message.has(Voice) or message.has(File):
             await message.send()
         else:
             await UniHelper.reply_to_current_event(message).send()
 
-    # 4. 缓存解析结果
-    _RESULT_CACHE[cache_key] = result
+
+@UniHelper.with_processing_reply
+async def parser_handler(
+    sr: SearchResult = Searched(),
+) -> None:
+    """统一的解析处理器"""
+    cache_key = sr.searched.group(0)
+    parser = get_parser(sr.keyword)
+    label = f"{parser.platform.name}:{cache_key[:80]}"
+
+    async def prepare() -> _PreparedParse:
+        result = _RESULT_CACHE.get(cache_key)
+        if result is None:
+            result = await parser.parse(sr.keyword, sr.searched)
+            logger.debug(f"解析结果: {result}")
+        else:
+            logger.debug(f"命中缓存: {cache_key}, 结果: {result}")
+
+        # 卡片与媒体全部生成完毕后才发送, 重试不会产生重复消息
+        messages = await collect_parse_messages(result)
+        _RESULT_CACHE[cache_key] = result
+        return _PreparedParse(result, messages)
+
+    try:
+        prepared = await parser_queue.submit(
+            prepare,
+            label=label,
+            dedupe_key=cache_key,
+        )
+    except DeliveryFailure as error:
+        # 最后一次尝试仍有媒体失败: 发送已成功的部分, 再发送一条完整错误提示
+        if error.partial_messages:
+            try:
+                await _send_messages(error.partial_messages)
+            except Exception:  # noqa: BLE001 - 不覆盖原始失败原因
+                logger.exception("发送部分解析结果失败")
+        raise TipException(
+            format_parse_error(error, parser.platform.display_name)
+        ) from error
+    except ParseException as error:
+        raise TipException(
+            format_parse_error(error, parser.platform.display_name)
+        ) from error
+    except MatcherException:
+        raise
+    except Exception as error:
+        logger.opt(exception=error).error("media parser handling failed")
+        raise TipException(
+            format_parse_error(error, parser.platform.display_name)
+        ) from error
+
+    await _send_messages(prepared.messages)
 
 
 @on_command("bm", priority=3, block=True).handle()

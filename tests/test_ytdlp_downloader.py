@@ -9,7 +9,11 @@ from yt_dlp.utils import DownloadError
 from src.plugins.media_parser import config as media_config
 from src.plugins.media_parser.config import pconfig
 from src.plugins.media_parser.download.ytdlp import YtdlpDownloader
-from src.plugins.media_parser.exception import IgnoreException, TipException
+from src.plugins.media_parser.exception import (
+    IgnoreException,
+    ParseException,
+    is_retryable,
+)
 from src.plugins.media_parser.utils import generate_file_name
 
 
@@ -29,7 +33,9 @@ def test_ytdlp_uses_global_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
     assert downloader._download_base_opts.get("proxy") == "http://proxy:23333"
 
 
-def test_ytdlp_errors_become_user_facing_tips(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ytdlp_errors_become_specific_parse_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class FailingYoutubeDL:
         def __init__(self, _options: object) -> None:
             pass
@@ -45,8 +51,9 @@ def test_ytdlp_errors_become_user_facing_tips(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FailingYoutubeDL)
 
-    with pytest.raises(TipException, match="媒体资源获取失败"):
+    with pytest.raises(ParseException, match="未找到可用的视频格式") as exc_info:
         asyncio.run(YtdlpDownloader().extract_video_info("https://example.com/video"))
+    assert not is_retryable(exc_info.value)
 
 
 def _video_info_dict(duration: int = 60) -> dict[str, object]:
@@ -101,7 +108,7 @@ def test_ytdlp_video_failure_cleans_attempt_directory(
     async def run() -> None:
         await downloader.download_video(url)
 
-    with pytest.raises(TipException, match="媒体资源获取失败"):
+    with pytest.raises(ParseException, match="媒体资源获取失败"):
         asyncio.run(run())
 
     assert not (tmp_path / file_name).exists()
@@ -127,7 +134,7 @@ def test_ytdlp_audio_failure_does_not_return_partial(
     async def run() -> None:
         await downloader.download_audio(url)
 
-    with pytest.raises(TipException, match="媒体资源获取失败"):
+    with pytest.raises(ParseException, match="媒体资源获取失败"):
         asyncio.run(run())
 
     assert not (tmp_path / f"{file_name}.flac").exists()

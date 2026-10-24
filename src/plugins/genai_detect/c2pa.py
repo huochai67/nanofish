@@ -11,7 +11,12 @@ from urllib.parse import urlsplit
 from nonebot import logger
 
 from ..utils import HttpRequestError, http_get
-from .c2pa_validation import C2paResult, C2paStatus, inspect_embedded_c2pa
+from .c2pa_validation import (
+    C2paResult,
+    C2paStatus,
+    c2pa_sdk_available,
+    inspect_embedded_c2pa,
+)
 
 if TYPE_CHECKING:
     from .config import Config
@@ -79,8 +84,10 @@ async def _official_trust_anchors(config: Config) -> str | None:
         return _trust_anchor_cache.anchors
 
 
-async def inspect_image_url(url: str, config: Config) -> C2paResult:
+async def inspect_image_url(url: str, config: Config) -> C2paResult:  # noqa: PLR0911
     """Download one image and verify only its embedded C2PA manifest."""
+    if not c2pa_sdk_available():
+        return C2paResult(C2paStatus.UNSUPPORTED)
     if not _is_http_url(url):
         return C2paResult(C2paStatus.DOWNLOAD_FAILED)
     try:

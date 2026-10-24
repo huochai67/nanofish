@@ -6,10 +6,18 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import aiofiles
+from nonebot import logger
+from nonebot_plugin_alconna.uniseg import Text
 
-from ..app import app_parser_image
+from ..app import BrowserUnavailableError, app_parser_image
 from .config import pconfig
-from .exception import DownloadException, IgnoreException
+from .exception import (
+    DeliveryFailure,
+    DownloadException,
+    IgnoreException,
+    describe_error,
+    is_retryable,
+)
 from .helper import ForwardNodeInner, UniHelper, UniMessage
 from .parsers import AudioContent, ImageContent, ParseResult, VideoContent
 from .parsers.task import PathTask
@@ -154,7 +162,11 @@ async def _save_image(raw: bytes) -> Path:
 async def _card_segment(result: ParseResult):
     image_path = result.render_image
     if image_path is None or not image_path.exists():
-        image_raw = await _render_card(result)
+        try:
+            image_raw = await _render_card(result)
+        except BrowserUnavailableError as error:
+            logger.warning(f"Playwright 不可用，改发文字卡片: {error}")
+            return Text(_text_card(result))
         image_path = await _save_image(image_raw)
         result.render_image = image_path
         if pconfig.use_base64:
@@ -162,17 +174,47 @@ async def _card_segment(result: ParseResult):
     return UniHelper.img_seg(image_path)
 
 
+def _text_card(result: ParseResult) -> str:
+    """Playwright 不可用时的纯文本卡片"""
+    lines: list[str] = []
+    if result.title:
+        lines.append(f"【{result.title}】")
+    if result.author is not None and result.author.name:
+        lines.append(result.author.name)
+    if result.text:
+        text = result.text.strip()
+        if len(text) > 500:
+            text = f"{text[:499]}…"
+        lines.append(text)
+    return "\n".join(lines) or "解析完成"
+
+
+def _media_failure_message(errors: list[Exception]) -> str:
+    details: list[str] = []
+    for error in errors:
+        detail = describe_error(error)
+        if detail.startswith("媒体下载失败"):
+            detail = detail[len("媒体下载失败") :].lstrip("：: ")
+        if not detail or detail in details:
+            continue
+        details.append(detail)
+
+    message = f"{len(errors)} 项媒体下载失败"
+    if details:
+        message += "：" + "；".join(details[:2])
+    return message
+
+
 async def _media_messages(  # noqa: C901, PLR0912
     result: ParseResult,
 ) -> AsyncGenerator[UniMessage[Any], None]:
-    failed_count = 0
+    failed_errors: list[Exception] = []
     mergeable_segs: list[ForwardNodeInner] = []
     other_segs: list[ForwardNodeInner] = []
 
     def on_error(error: Exception) -> None:
-        nonlocal failed_count
         if not isinstance(error, IgnoreException):
-            failed_count += 1
+            failed_errors.append(error)
 
     for content in chain(
         result.contents,
@@ -222,10 +264,11 @@ async def _media_messages(  # noqa: C901, PLR0912
             for segment in other_segs:
                 yield UniMessage(segment)
 
-    if failed_count > 0:
-        message = f"{failed_count} 项媒体下载失败"
-        yield UniMessage(message)
-        raise DownloadException(message)
+    if failed_errors:
+        raise DownloadException(
+            _media_failure_message(failed_errors),
+            retryable=any(is_retryable(error) for error in failed_errors),
+        )
 
 
 async def deliver_parse_result(
@@ -239,3 +282,14 @@ async def deliver_parse_result(
 
     async for message in _media_messages(result):
         yield message
+
+
+async def collect_parse_messages(result: ParseResult) -> list[UniMessage[Any]]:
+    """收集完整投递内容; 媒体失败时附带已完成的消息一起抛出, 便于最终失败时一次性发送"""
+    messages: list[UniMessage[Any]] = []
+    try:
+        async for message in deliver_parse_result(result):
+            messages.append(message)
+    except DownloadException as error:
+        raise DeliveryFailure(error.message, messages) from error
+    return messages

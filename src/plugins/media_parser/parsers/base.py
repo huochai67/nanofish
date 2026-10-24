@@ -102,7 +102,7 @@ class BaseParser:
         redirect_url = await self.get_redirect_url(url, headers=headers or self.headers)
 
         if redirect_url == url:
-            raise ParseException(f"无法重定向 URL: {url}")
+            raise ParseException(f"无法重定向 URL: {url}", retryable=False)
 
         keyword, searched = self.search_url(redirect_url)
         return await self.parse(keyword, searched)
@@ -115,7 +115,7 @@ class BaseParser:
                 continue
             if searched := pattern.search(url):
                 return keyword, searched
-        raise ParseException(f"无法匹配 {url}")
+        raise ParseException(f"无法匹配 {url}", retryable=False)
 
     @classmethod
     def result(cls, **kwargs: Unpack[ParseResultKwargs]) -> ParseResult:

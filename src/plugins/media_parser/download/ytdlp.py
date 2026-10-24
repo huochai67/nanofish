@@ -14,7 +14,45 @@ from src.proxy import get_http_proxy_from_env
 from .task import auto_task
 from ..utils import LimitedSizeDict, generate_file_name, valid_cached_file
 from ..config import pconfig
-from ..exception import IgnoreException, ParseException, TipException
+from ..exception import IgnoreException, ParseException
+
+_YTDLP_PERMANENT_ERRORS: tuple[tuple[str, str], ...] = (
+    ("private video", "视频为私密内容，无法访问"),
+    ("this video is private", "视频为私密内容，无法访问"),
+    ("video unavailable", "视频已删除或不可用"),
+    ("this video is not available", "视频已删除或不可用"),
+    ("has been removed", "内容已被删除"),
+    ("unsupported url", "不支持的链接"),
+    ("format unavailable", "未找到可用的视频格式"),
+    ("no video formats found", "未找到可用的视频格式"),
+    ("requested format is not available", "未找到可用的视频格式"),
+    ("sign in to confirm", "需要登录或 Cookie 才能访问"),
+    ("login required", "需要登录或 Cookie 才能访问"),
+    ("age-restricted", "内容有年龄限制，需要登录"),
+    ("not available in your country", "内容在当前地区不可用"),
+    ("http error 403", "访问被拒绝或触发平台风控"),
+    ("http error 404", "内容不存在或已被删除"),
+)
+
+_YTDLP_TRANSIENT_MARKERS: tuple[str, ...] = (
+    "timed out",
+    "timeout",
+    "connection reset",
+    "connection refused",
+    "temporary failure",
+    "http error 5",
+)
+
+
+def describe_ytdlp_error(error: DownloadError) -> tuple[str | None, bool]:
+    """返回 (具体原因, 是否可重试); 原因为 None 表示没有可展示的细节"""
+    detail = str(error).lower()
+    for marker, message in _YTDLP_PERMANENT_ERRORS:
+        if marker in detail:
+            return message, False
+    if any(marker in detail for marker in _YTDLP_TRANSIENT_MARKERS):
+        return "网络请求失败，请稍后重试", True
+    return None, True
 
 
 class VideoInfo(Struct):
@@ -92,7 +130,13 @@ class YtdlpDownloader:
             return await asyncio.to_thread(func, *args, **kwargs)
         except DownloadError as e:
             logger.warning(f"yt-dlp failed: {e}")
-            raise TipException("媒体资源获取失败，请稍后重试") from e
+            detail, retryable = describe_ytdlp_error(e)
+            message = (
+                f"媒体资源获取失败：{detail}"
+                if detail
+                else "媒体资源获取失败，请稍后重试"
+            )
+            raise ParseException(message, retryable=retryable) from e
 
     async def extract_video_info(self, url: str, cookiefile: Path | None = None) -> VideoInfo:
         """Get video info by yt-dlp"""

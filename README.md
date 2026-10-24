@@ -16,10 +16,10 @@ docker/          # 容器启动脚本
 |------|------|------|
 | `acl` | `/auth` | 角色权限、群范围、日配额/冷却、每命令限流、运行时授权 |
 | `llm` | `/llm <内容>`、`/draw [@模型] <描述>` | 多模态对话（截图回传）；多档案文生图/图生图，档案级 OpenAI、Grok、Gemini 原生后端（默认 user + 日配额） |
-| `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入） |
+| `app` | — | Playwright 截图（长驻 browser + context，聊天数据 page 注入；`browser` extra，缺失时链接解析回退文字卡片） |
 | `ehsearch` | `/eh <书名>` 或回复后 `/eh` | E-Hentai 搜索，结果 HTML 截图回传（默认 admin + 配额） |
 | `imgsearch` | `/imgsearch` | 回复或附带图片反向搜索 SauceNAO；可选 Soutubot（默认 user + 配额） |
-| `genai_detect` | `/genai` | 自动验证所有接收图片的内嵌可信 C2PA 凭证；`/genai` 使用 Sightengine 检测（默认 user + 配额） |
+| `genai_detect` | `/genai` | 自动验证所有接收图片的内嵌可信 C2PA 凭证（需 `c2pa` extra，缺失时跳过）；`/genai` 使用 Sightengine 检测（默认 user + 配额） |
 | `jrrp` | `/jrrp` | 今日祝福/人品（默认 guest） |
 | `health` | `/health` | 深度健康检查（默认 superuser） |
 | `media_parser` | 自动解析支持平台链接、`/bm` | 前端主题卡片预览与媒体回传；支持 YouTube Music、Spotify、网易云音乐、QQ 音乐，受授权、登录、地区或 DRM 限制的歌曲仅返回卡片（受 ACL 范围和角色限制；初始关闭 YouTube/TikTok/Twitter） |
@@ -73,8 +73,10 @@ docker/          # 容器启动脚本
 ### 1. 后端
 
 ```bash
-# 安装依赖（uv）
-uv sync
+# 安装依赖（uv）。Playwright / c2pa-python 仅发布 manylinux(musl 不支持) 轮子：
+# glibc 平台安装完整功能；musl 平台（如 Alpine）使用 `uv sync` 跳过这两个 extra，
+# 截图回退为文字卡片，C2PA 校验标记为 unsupported，完整功能请使用 Docker。
+uv sync --extra browser --extra c2pa
 
 # 复制并填写运行环境与业务配置
 cp .env.example .env
