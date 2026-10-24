@@ -158,7 +158,7 @@ async def check_eh_tags() -> CheckResult:
 
 
 def check_sightengine() -> CheckResult:
-    cfg = _plugin_config("genai_detect")
+    cfg = _plugin_config("genai_detect", "plugin_config")
     if cfg is None:
         return CheckResult("Sightengine", Status.SKIP, "插件未加载")
     user = getattr(cfg, "sightengine_api_user", None)
