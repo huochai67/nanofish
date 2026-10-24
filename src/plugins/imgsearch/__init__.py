@@ -21,7 +21,14 @@ from .config import Config
 require("acl")
 require("app")
 require("utils")
-from ..acl import check_quota, consume_quota, require_command
+from ..acl import (
+    QuotaDefaults,
+    Role,
+    check_quota,
+    consume_quota,
+    register_command,
+    require_command,
+)
 from ..app import app_imgsearch_image_cq
 from ..utils import (
     CloudScraperClient,
@@ -43,6 +50,8 @@ __plugin_meta__ = PluginMetadata(
 )
 
 config: Config = get_yaml_plugin_config(Config, "imgsearch")
+
+register_command("imgsearch", default_role=Role.USER, quota=QuotaDefaults())
 imgsearch = on_command(
     "imgsearch",
     priority=10,

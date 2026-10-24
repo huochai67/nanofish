@@ -18,7 +18,14 @@ from .ehapi import EhAPI, EhMetaData
 require("acl")
 require("app")
 require("utils")
-from ..acl import check_quota, consume_quota, require_command
+from ..acl import (
+    QuotaDefaults,
+    Role,
+    check_quota,
+    consume_quota,
+    register_command,
+    require_command,
+)
 from ..app import app_eh_image_cq
 from ..utils import (
     HttpRequestError,
@@ -38,6 +45,8 @@ __plugin_meta__ = PluginMetadata(
 )
 
 config: Config = get_yaml_plugin_config(Config, "ehsearch")
+
+register_command("eh", default_role=Role.ADMIN, quota=QuotaDefaults())
 ehapi: EhAPI = EhAPI(
     proxy=config.proxy,
     cookies={

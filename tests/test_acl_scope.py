@@ -29,7 +29,7 @@ def test_superuser_must_be_in_allowed_group() -> None:
 
     config = Config.model_construct(acl_allow_private=False, acl_allowed_groups=[100])
     with (
-        patch.object(service, "config", config),
+        patch.object(service, "get_config", return_value=config),
         patch.object(service, "GroupMessageEvent", _GroupEvent),
         patch.object(service, "PrivateMessageEvent", _PrivateEvent),
         patch.object(service, "is_superuser", return_value=True),
@@ -42,20 +42,20 @@ def test_superuser_must_be_in_allowed_group() -> None:
 def test_superuser_cannot_bypass_private_or_auth_scope() -> None:
     _load_acl()
     from src.plugins.acl import commands, service
-    from src.plugins.acl.config import Config
+    from src.plugins.acl.config import Config, PluginPolicy
     from src.plugins.acl.roles import Role
 
     config = Config.model_construct(
         acl_allow_private=False,
         acl_allowed_groups=[100],
-        acl_perm_auth=Role.ADMIN,
+        plugins={"auth": PluginPolicy(permission=Role.ADMIN)},
     )
     with (
-        patch.object(service, "config", config),
+        patch.object(service, "get_config", return_value=config),
         patch.object(service, "GroupMessageEvent", _GroupEvent),
         patch.object(service, "PrivateMessageEvent", _PrivateEvent),
         patch.object(service, "is_superuser", return_value=True),
         patch.object(service.acl_store, "group_enabled", return_value=None),
     ):
         assert not service.scope_allows(_PrivateEvent(1))
-        assert not commands.can_manage(_GroupEvent(1, 200), config)
+        assert not commands.can_manage(_GroupEvent(1, 200))

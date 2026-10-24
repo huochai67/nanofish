@@ -8,16 +8,18 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent, MessageEvent
 from nonebot.matcher import Matcher
 
 from ..utils import reply_to_event
-from .config import Config
+from .registry import quota_commands, registered_commands
 from .roles import Role
 from .service import (
     check_quota,
     event_allows,
+    get_config,
     get_group_id,
     get_user_id,
     is_blacklisted,
     is_superuser,
     perm_for_command,
+    quota_limits,
     resolve_role,
     scope_allows,
 )
@@ -44,8 +46,8 @@ def parse_target_uid(raw: str) -> int | None:
     return None
 
 
-def can_manage(event: MessageEvent, config: Config) -> bool:
-    return event_allows(event, config.acl_perm_auth)
+def can_manage(event: MessageEvent) -> bool:
+    return event_allows(event, perm_for_command("auth"))
 
 
 def role_summary(user_id: int) -> str:
@@ -69,7 +71,8 @@ async def cmd_whoami(matcher: Matcher, event: MessageEvent) -> None:
         f"范围: {'允许' if scope_ok else '拒绝'}"
         + (f"（群 {gid}）" if gid is not None else "（私聊）"),
     ]
-    for cmd in ("genai", "eh", "imgsearch"):
+    commands = sorted(quota_commands())
+    for cmd in commands:
         q = check_quota(event, cmd)
         if q.limit > 0:
             lines.append(f"/{cmd} 今日 {q.used}/{q.limit}")
@@ -79,10 +82,14 @@ async def cmd_whoami(matcher: Matcher, event: MessageEvent) -> None:
 
 
 async def cmd_quota(matcher: Matcher, event: MessageEvent, rest: list[str]) -> None:
-    cmd = rest[0].lower() if rest else "genai"
-    if cmd not in {"genai", "eh", "imgsearch"}:
+    commands = sorted(quota_commands())
+    if not commands:
+        await matcher.finish(reply_to_event(event, "当前没有支持配额的命令"))
+        return
+    cmd = rest[0].lower() if rest else commands[0]
+    if cmd not in commands:
         await matcher.finish(
-            reply_to_event(event, "用法: /auth quota [genai|eh|imgsearch]")
+            reply_to_event(event, f"用法: /auth quota [{'|'.join(commands)}]")
         )
         return
     q = check_quota(event, cmd)
@@ -96,12 +103,14 @@ async def cmd_quota(matcher: Matcher, event: MessageEvent, rest: list[str]) -> N
 
 
 async def cmd_help(matcher: Matcher, event: MessageEvent) -> None:
+    commands = sorted(quota_commands())
+    quota_usage = f"/auth quota [{'|'.join(commands)}]" if commands else "/auth quota"
     await matcher.finish(
         reply_to_event(
             event,
             "用法:\n"
             "/auth whoami\n"
-            "/auth quota [genai|eh|imgsearch]\n"
+            f"{quota_usage}\n"
             "/auth list\n"
             "/auth set <qq|@> <guest|user|admin>\n"
             "/auth unset <qq|@>\n"
@@ -111,7 +120,8 @@ async def cmd_help(matcher: Matcher, event: MessageEvent) -> None:
     )
 
 
-async def cmd_list(matcher: Matcher, event: MessageEvent, config: Config) -> None:
+async def cmd_list(matcher: Matcher, event: MessageEvent) -> None:
+    config = get_config()
     lines = ["ACL 状态"]
     if config.acl_admins:
         lines.append("env admins: " + ", ".join(str(x) for x in config.acl_admins))
@@ -147,20 +157,14 @@ async def cmd_list(matcher: Matcher, event: MessageEvent, config: Config) -> Non
         lines.append("群白名单: （不限制）")
     lines.append(f"私聊: {'允许' if config.acl_allow_private else '拒绝'}")
     rate_limits = ", ".join(
-        f"{command}={getattr(config, f'acl_rate_limit_{command}_per_minute')}/分钟"
-        for command in ("genai", "eh", "imgsearch")
+        f"{command}={limits[2]}/分钟"
+        for command in sorted(quota_commands())
+        if (limits := quota_limits(command)) is not None
     )
     lines.append(f"高成本命令每分钟限流: {rate_limits}")
     perms = ", ".join(
-        f"{c}={perm_for_command(c).label()}"
-        for c in (
-            "jrrp",
-            "genai",
-            "eh",
-            "imgsearch",
-            "health",
-            "auth",
-        )
+        f"{spec.name}={perm_for_command(spec.name).label()}"
+        for spec in sorted(registered_commands(), key=lambda item: item.name)
     )
     lines.append(f"命令门槛: {perms}")
     await matcher.finish(reply_to_event(event, "\n".join(lines)))

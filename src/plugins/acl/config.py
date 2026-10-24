@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
-from pydantic import BaseModel, BeforeValidator, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
+from .registry import lookup, registered_commands
 from .roles import Role
 
 
@@ -106,62 +107,70 @@ RoleField = Annotated[Role, BeforeValidator(_parse_role)]
 NonNegIntField = Annotated[int, BeforeValidator(_parse_nonneg_int)]
 NonNegFloatField = Annotated[float, BeforeValidator(_parse_nonneg_float)]
 
-_ACL_PLUGIN_FIELDS = {
-    "jrrp": {"permission"},
-    "genai": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
-    "eh": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
-    "imgsearch": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
-    "agent": {"permission", "quota_daily", "rate_limit_per_minute", "cooldown"},
-    "parser": {"permission"},
-    "health": {"permission"},
-    "auth": {"permission"},
-}
+_PERMISSION_KEYS = frozenset({"permission"})
+_QUOTA_KEYS = frozenset({"quota_daily", "rate_limit_per_minute", "cooldown"})
+
+
+class PluginPolicy(BaseModel):
+    """Per-command overrides for the defaults declared in the registry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    permission: RoleField | None = None
+    quota_daily: NonNegIntField | None = None
+    rate_limit_per_minute: NonNegIntField | None = None
+    cooldown: NonNegFloatField | None = None
 
 
 class Config(BaseModel):
     """ACL plugin configuration from ``config.yaml``."""
 
+    model_config = ConfigDict(extra="forbid")
+
     @model_validator(mode="before")
     @classmethod
-    def _flatten_plugin_settings(cls, value: Any) -> Any:
+    def _collect_plugin_policies(cls, value: Any) -> Any:
         if not isinstance(value, dict):
             return value
 
         values = value.copy()
         plugins = values.pop("plugins", [])
+        if plugins is None:
+            plugins = []
         if not isinstance(plugins, list):
             msg = "acl.plugins must be a list"
             raise TypeError(msg)
 
-        seen: set[str] = set()
+        collected: dict[str, dict[str, Any]] = {}
         for item in plugins:
             if not isinstance(item, dict):
                 msg = "each acl.plugins item must be a mapping"
                 raise TypeError(msg)
             name = item.get("name")
-            if not isinstance(name, str) or name not in _ACL_PLUGIN_FIELDS:
-                msg = f"unknown ACL plugin: {name!r}"
+            if not isinstance(name, str) or not name:
+                msg = f"invalid ACL plugin name: {name!r}"
                 raise ValueError(msg)
-            if name in seen:
+            if name in collected:
                 msg = f"duplicate ACL plugin: {name}"
                 raise ValueError(msg)
-            seen.add(name)
 
-            allowed = {"name", *_ACL_PLUGIN_FIELDS[name]}
-            unknown = set(item) - allowed
+            spec = lookup(name)
+            if spec is None:
+                names = ", ".join(sorted(s.name for s in registered_commands()))
+                msg = f"unknown ACL plugin: {name!r}; registered: {names or '(none)'}"
+                raise ValueError(msg)
+
+            payload = {key: raw for key, raw in item.items() if key != "name"}
+            allowed = _PERMISSION_KEYS | (
+                _QUOTA_KEYS if spec.quota is not None else frozenset()
+            )
+            unknown = set(payload) - allowed
             if unknown:
                 msg = f"unsupported ACL settings for {name}: {sorted(unknown)}"
                 raise ValueError(msg)
-            for setting, raw in item.items():
-                if setting == "name":
-                    continue
-                field = {
-                    "permission": f"acl_perm_{name}",
-                    "quota_daily": f"acl_quota_{name}_daily",
-                    "rate_limit_per_minute": f"acl_rate_limit_{name}_per_minute",
-                    "cooldown": f"acl_cooldown_{name}",
-                }[setting]
-                values[field] = raw
+            collected[name] = payload
+
+        values["plugins"] = collected
         return values
 
     # Scope
@@ -188,91 +197,8 @@ class Config(BaseModel):
         description="静态黑名单；运行时 ban 另存 localstore",
     )
 
-    # Min role per command
-    acl_perm_jrrp: RoleField = Field(default=Role.GUEST, description="/jrrp 最低角色")
-    acl_perm_genai: RoleField = Field(default=Role.USER, description="/genai 最低角色")
-    acl_perm_eh: RoleField = Field(default=Role.ADMIN, description="/eh 最低角色")
-    acl_perm_imgsearch: RoleField = Field(
-        default=Role.USER,
-        description="/imgsearch 最低角色",
-    )
-    acl_perm_agent: RoleField = Field(
-        default=Role.USER,
-        description="/agent 最低角色",
-    )
-    acl_perm_parser: RoleField = Field(
-        default=Role.USER,
-        description="链接解析与 /bm 最低角色",
-    )
-    acl_perm_health: RoleField = Field(
-        default=Role.SUPERUSER,
-        description="/health 最低角色",
-    )
-    acl_perm_auth: RoleField = Field(
-        default=Role.ADMIN,
-        description="/auth 管理子命令最低角色",
-    )
-
-    # Quotas (0 = unlimited)
-    acl_quota_genai_daily: NonNegIntField = Field(
-        default=20,
-        ge=0,
-        description="/genai 日配额",
-    )
-    acl_quota_eh_daily: NonNegIntField = Field(
-        default=20,
-        ge=0,
-        description="/eh 日配额",
-    )
-    acl_quota_imgsearch_daily: NonNegIntField = Field(
-        default=20,
-        ge=0,
-        description="/imgsearch 日配额",
-    )
-    acl_quota_agent_daily: NonNegIntField = Field(
-        default=20,
-        ge=0,
-        description="/agent 日配额",
-    )
-    acl_rate_limit_genai_per_minute: NonNegIntField = Field(
-        default=0,
-        ge=0,
-        description="/genai 滚动每分钟请求上限；0 表示不限制",
-    )
-    acl_rate_limit_eh_per_minute: NonNegIntField = Field(
-        default=0,
-        ge=0,
-        description="/eh 滚动每分钟请求上限；0 表示不限制",
-    )
-    acl_rate_limit_imgsearch_per_minute: NonNegIntField = Field(
-        default=0,
-        ge=0,
-        description="/imgsearch 滚动每分钟请求上限；0 表示不限制",
-    )
-    acl_rate_limit_agent_per_minute: NonNegIntField = Field(
-        default=0,
-        ge=0,
-        description="/agent 滚动每分钟请求上限；0 表示不限制",
-    )
-
-    # Cooldown seconds (0 = none)
-    acl_cooldown_genai: NonNegFloatField = Field(
-        default=10.0,
-        ge=0,
-        description="/genai 冷却秒",
-    )
-    acl_cooldown_eh: NonNegFloatField = Field(
-        default=10.0,
-        ge=0,
-        description="/eh 冷却秒",
-    )
-    acl_cooldown_imgsearch: NonNegFloatField = Field(
-        default=10.0,
-        ge=0,
-        description="/imgsearch 冷却秒",
-    )
-    acl_cooldown_agent: NonNegFloatField = Field(
-        default=10.0,
-        ge=0,
-        description="/agent 冷却秒",
+    # Per-command overrides; defaults and capability live with each plugin.
+    plugins: dict[str, PluginPolicy] = Field(
+        default_factory=dict,
+        description="命令级权限/配额覆盖；未列出的命令使用插件声明的默认值",
     )

@@ -12,7 +12,14 @@ from .config import Config
 
 require("acl")
 require("utils")
-from ..acl import check_quota, consume_quota, require_command
+from ..acl import (
+    QuotaDefaults,
+    Role,
+    check_quota,
+    consume_quota,
+    register_command,
+    require_command,
+)
 from ..utils import (
     HttpRequestError,
     ProcessingReply,
@@ -35,6 +42,7 @@ __plugin_meta__ = PluginMetadata(
 
 plugin_config = get_yaml_plugin_config(Config, "genai_detect")
 
+register_command("genai", default_role=Role.USER, quota=QuotaDefaults())
 genai = on_command(
     "genai",
     priority=10,

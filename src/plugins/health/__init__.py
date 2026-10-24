@@ -15,7 +15,7 @@ from .config import Config
 require("acl")
 require("app")
 require("utils")
-from ..acl import require_command
+from ..acl import Role, register_command, require_command
 from ..app import client as app_client
 from ..app import config as app_config
 from ..utils import (
@@ -36,6 +36,7 @@ __plugin_meta__ = PluginMetadata(
 
 config: Config = get_yaml_plugin_config(Config, "health")
 
+register_command("health", default_role=Role.SUPERUSER)
 health = on_command(
     "health",
     priority=10,

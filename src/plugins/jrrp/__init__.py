@@ -9,7 +9,7 @@ from .config import Config
 
 require("acl")
 require("utils")
-from ..acl import require_command
+from ..acl import Role, register_command, require_command
 from ..utils import reply_to_event
 
 __plugin_meta__ = PluginMetadata(
@@ -21,6 +21,7 @@ __plugin_meta__ = PluginMetadata(
 
 config = get_plugin_config(Config)
 
+register_command("jrrp", default_role=Role.GUEST)
 jrrp = on_command("jrrp", permission=require_command("jrrp"))
 
 

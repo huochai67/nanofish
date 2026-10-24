@@ -20,7 +20,13 @@ require("nonebot_plugin_localstore")
 
 import nonebot_plugin_localstore as localstore
 
-from ..acl import consume_quota, require_command
+from ..acl import (
+    QuotaDefaults,
+    Role,
+    consume_quota,
+    register_command,
+    require_command,
+)
 from ..utils import (
     ProcessingReply,
     get_plaintext,
@@ -60,6 +66,8 @@ __plugin_meta__ = PluginMetadata(
 )
 
 config: Config = get_yaml_plugin_config(Config, "agent")
+
+register_command("agent", default_role=Role.USER, quota=QuotaDefaults())
 
 _PROFILE_ARG = re.compile(
     r"^@([A-Za-z0-9][A-Za-z0-9_.-]{0,63})(?:\s+|$)(.*)$",

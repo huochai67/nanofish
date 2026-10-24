@@ -8,8 +8,10 @@ acl:
   acl_admins: []
   acl_user_whitelist: []
   acl_blacklist: []
-  # 每项的 name 不能重复。quota_daily、rate_limit_per_minute、cooldown
-  # 分别代表每日配额、跨用户每分钟请求上限和个人冷却秒数；0 均表示不限制。
+  # 每项的 name 必须是已加载插件注册的命令名，不能重复；这里只写覆盖项，
+  # 未列出的命令使用插件声明的默认角色/配额。quota_daily、
+  # rate_limit_per_minute、cooldown 分别代表每日配额、跨用户每分钟请求上限
+  # 和个人冷却秒数；0 均表示不限制。
   plugins:
     - name: jrrp
       permission: guest

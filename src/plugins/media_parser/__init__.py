@@ -13,6 +13,7 @@ require("nonebot_plugin_uninfo")
 require("app")
 require("acl")
 
+from ..acl import Role, register_command
 from ..acl.service import event_allows, perm_for_command, require_command
 from .config import Config, pconfig
 from .matchers import clear_result_cache
@@ -45,6 +46,8 @@ __plugin_meta__ = PluginMetadata(
 
 require("nonebot_plugin_apscheduler")
 from nonebot_plugin_apscheduler import scheduler
+
+register_command("parser", default_role=Role.USER)
 
 _PARSER_PLUGIN = "media_parser"
 _PARSER_COMMAND_PRIORITY = 3

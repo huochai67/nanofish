@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from nonebot import logger, on_command, require
+from nonebot import get_driver, logger, on_command, require
 from nonebot.adapters.onebot.v11 import Message, MessageEvent
 from nonebot.matcher import Matcher
 from nonebot.params import CommandArg
 from nonebot.plugin import PluginMetadata
-
-from src.plugin_config import get_yaml_plugin_config
 
 require("nonebot_plugin_localstore")
 require("utils")
@@ -17,12 +15,14 @@ from ..utils import reply_to_event
 from . import commands as auth_cmds
 from .config import Config
 from .quota import quota_tracker
+from .registry import QuotaDefaults, register_command, registered_commands
 from .roles import ROLE_ORDER, Role
 from .service import (
     check_quota,
     consume_quota,
     ensure_quota,
     event_allows,
+    get_config,
     get_group_id,
     get_user_id,
     is_blacklisted,
@@ -45,19 +45,23 @@ __plugin_meta__ = PluginMetadata(
     config=Config,
 )
 
-config: Config = get_yaml_plugin_config(Config, "acl")
-
+register_command("auth", default_role=Role.ADMIN)
 acl_store.load()
 quota_tracker.load()
-_groups = config.acl_allowed_groups
-logger.info(
-    "[acl] loaded "
-    f"(admins={list(config.acl_admins)}, "
-    f"groups={_groups or 'all'}, "
-    f"private={config.acl_allow_private}, "
-    f"perm_genai={config.acl_perm_genai.label()}, "
-    f"perm_eh={config.acl_perm_eh.label()})"
-)
+
+
+@get_driver().on_startup
+async def _log_acl_config() -> None:
+    # Parsing here (not at import) guarantees every plugin has registered.
+    config = get_config()
+    logger.info(
+        "[acl] loaded "
+        f"(admins={list(config.acl_admins)}, "
+        f"groups={config.acl_allowed_groups or 'all'}, "
+        f"private={config.acl_allow_private}, "
+        f"commands={', '.join(spec.name for spec in registered_commands())})"
+    )
+
 
 auth = on_command("auth", priority=5, block=True)
 
@@ -78,14 +82,14 @@ async def _dispatch_auth(
         await auth_cmds.cmd_help(matcher, event)
         return
 
-    if not auth_cmds.can_manage(event, config):
+    if not auth_cmds.can_manage(event):
         if scope_allows(event):
             await matcher.finish(reply_to_event(event, "权限不足"))
         await matcher.finish()
         return
 
     managed = {
-        "list": lambda: auth_cmds.cmd_list(matcher, event, config),
+        "list": lambda: auth_cmds.cmd_list(matcher, event),
         "set": lambda: auth_cmds.cmd_set(matcher, event, rest),
         "unset": lambda: auth_cmds.cmd_unset(matcher, event, rest),
         "ban": lambda: auth_cmds.cmd_ban(matcher, event, rest),
@@ -114,17 +118,19 @@ async def handle_auth(
 
 __all__ = [
     "ROLE_ORDER",
+    "QuotaDefaults",
     "Role",
     "check_quota",
-    "config",
     "consume_quota",
     "ensure_quota",
     "event_allows",
+    "get_config",
     "get_group_id",
     "get_user_id",
     "is_blacklisted",
     "is_superuser",
     "perm_for_command",
+    "register_command",
     "require_command",
     "require_level",
     "resolve_role",

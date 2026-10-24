@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import cache
+
 from nonebot import get_driver
 from nonebot.adapters.onebot.v11 import (
     GroupMessageEvent,
@@ -12,35 +14,22 @@ from nonebot.permission import Permission
 
 from src.plugin_config import get_yaml_plugin_config
 
-from .config import Config
+from .config import Config, PluginPolicy
 from .quota import QuotaResult, quota_tracker
+from .registry import get_spec
 from .roles import Role
 from .store import acl_store
 
-config: Config = get_yaml_plugin_config(Config, "acl")
 
-_QUOTA_COMMANDS: dict[str, tuple[str, str, str]] = {
-    "genai": (
-        "acl_quota_genai_daily",
-        "acl_cooldown_genai",
-        "acl_rate_limit_genai_per_minute",
-    ),
-    "eh": (
-        "acl_quota_eh_daily",
-        "acl_cooldown_eh",
-        "acl_rate_limit_eh_per_minute",
-    ),
-    "imgsearch": (
-        "acl_quota_imgsearch_daily",
-        "acl_cooldown_imgsearch",
-        "acl_rate_limit_imgsearch_per_minute",
-    ),
-    "agent": (
-        "acl_quota_agent_daily",
-        "acl_cooldown_agent",
-        "acl_rate_limit_agent_per_minute",
-    ),
-}
+@cache
+def get_config() -> Config:
+    """Parse ACL config lazily, after every plugin has registered its command."""
+    return get_yaml_plugin_config(Config, "acl")
+
+
+def _policy(command: str, config: Config | None) -> PluginPolicy | None:
+    cfg = get_config() if config is None else config
+    return cfg.plugins.get(command)
 
 
 def _superusers() -> set[str]:
@@ -70,6 +59,7 @@ def resolve_role(user_id: int) -> Role:
         # cannot grant superuser via store
         return Role.ADMIN if stored is Role.SUPERUSER else stored
 
+    config = get_config()
     if user_id in config.acl_admins:
         return Role.ADMIN
 
@@ -81,12 +71,13 @@ def resolve_role(user_id: int) -> Role:
 def is_blacklisted(user_id: int) -> bool:
     if is_superuser(user_id):
         return False
+    config = get_config()
     return user_id in config.acl_blacklist or acl_store.is_blacklisted(user_id)
 
 
 def scope_allows(event: MessageEvent) -> bool:
     if isinstance(event, PrivateMessageEvent):
-        return config.acl_allow_private
+        return get_config().acl_allow_private
 
     if not isinstance(event, GroupMessageEvent):
         return False
@@ -95,7 +86,7 @@ def scope_allows(event: MessageEvent) -> bool:
     override = acl_store.group_enabled(group_id)
     if override is not None:
         return override
-    allowed = config.acl_allowed_groups
+    allowed = get_config().acl_allowed_groups
     return (not allowed) or (group_id in allowed)
 
 
@@ -119,66 +110,110 @@ def require_level(min_role: Role | str) -> Permission:
     return Permission(_checker)
 
 
-def perm_for_command(command: str) -> Role:
-    mapping = {
-        "jrrp": config.acl_perm_jrrp,
-        "genai": config.acl_perm_genai,
-        "eh": config.acl_perm_eh,
-        "imgsearch": config.acl_perm_imgsearch,
-        "agent": config.acl_perm_agent,
-        "parser": config.acl_perm_parser,
-        "health": config.acl_perm_health,
-        "auth": config.acl_perm_auth,
-    }
-    return mapping.get(command, Role.USER)
+def perm_for_command(command: str, config: Config | None = None) -> Role:
+    """Resolve a command's minimum role from config, falling back to its spec.
+
+    Unknown command names raise instead of silently granting the default user
+    role; callers are expected to register their command at import time.
+    """
+    spec = get_spec(command)
+    policy = _policy(command, config)
+    if policy is not None and policy.permission is not None:
+        return policy.permission
+    return spec.default_role
 
 
 def require_command(command: str) -> Permission:
-    return require_level(perm_for_command(command))
+    get_spec(command)  # fail at import time on typos
+
+    async def _checker(event: MessageEvent) -> bool:
+        return event_allows(event, perm_for_command(command))
+
+    return Permission(_checker)
 
 
-def check_quota(event: MessageEvent, command: str) -> QuotaResult:
+def quota_limits(
+    command: str,
+    config: Config | None = None,
+) -> tuple[int, float, int] | None:
+    """Return ``(daily_limit, cooldown_seconds, per_minute_limit)``.
+
+    ``None`` means the command did not declare quota capability; callers treat
+    it as unlimited.  Unknown commands still fail closed via ``get_spec``.
+    """
+    spec = get_spec(command)
+    defaults = spec.quota
+    if defaults is None:
+        return None
+
+    policy = _policy(command, config)
+    daily = defaults.daily
+    cooldown = defaults.cooldown
+    per_minute = defaults.per_minute
+    if policy is not None:
+        if policy.quota_daily is not None:
+            daily = policy.quota_daily
+        if policy.cooldown is not None:
+            cooldown = policy.cooldown
+        if policy.rate_limit_per_minute is not None:
+            per_minute = policy.rate_limit_per_minute
+    return daily, cooldown, per_minute
+
+
+def check_quota(
+    event: MessageEvent,
+    command: str,
+    config: Config | None = None,
+) -> QuotaResult:
     """Check quota/cooldown without consuming."""
-    user_id = get_user_id(event)
-    specs = _QUOTA_COMMANDS.get(command)
-    if specs is None:
+    limits = quota_limits(command, config)
+    if limits is None:
         return QuotaResult(allowed=True, used=0, limit=0, remaining=-1)
 
-    daily_attr, cd_attr, rate_attr = specs
+    daily, cooldown, per_minute = limits
+    user_id = get_user_id(event)
     return quota_tracker.check(
         command=command,
         user_id=user_id,
-        daily_limit=int(getattr(config, daily_attr)),
-        cooldown=float(getattr(config, cd_attr)),
-        per_minute=int(getattr(config, rate_attr)),
+        daily_limit=daily,
+        cooldown=cooldown,
+        per_minute=per_minute,
         unlimited=is_superuser(user_id),
     )
 
 
-def consume_quota(event: MessageEvent, command: str) -> QuotaResult:
+def consume_quota(
+    event: MessageEvent,
+    command: str,
+    config: Config | None = None,
+) -> QuotaResult:
     """Atomically reserve quota before invoking a costly command."""
-    user_id = get_user_id(event)
-    specs = _QUOTA_COMMANDS.get(command)
-    if specs is None:
+    limits = quota_limits(command, config)
+    if limits is None:
         return QuotaResult(allowed=True, used=0, limit=0, remaining=-1)
 
-    daily_attr, cd_attr, rate_attr = specs
+    daily, cooldown, per_minute = limits
+    user_id = get_user_id(event)
     return quota_tracker.consume(
         command=command,
         user_id=user_id,
-        daily_limit=int(getattr(config, daily_attr)),
-        cooldown=float(getattr(config, cd_attr)),
-        per_minute=int(getattr(config, rate_attr)),
+        daily_limit=daily,
+        cooldown=cooldown,
+        per_minute=per_minute,
         unlimited=is_superuser(user_id),
     )
 
 
-def ensure_quota(event: MessageEvent, command: str) -> str | None:
+def ensure_quota(
+    event: MessageEvent,
+    command: str,
+    config: Config | None = None,
+) -> str | None:
     """
     Check quota; if allowed, consume one use and return None.
     If denied, return user-facing message (do not consume).
     """
-    result = consume_quota(event, command)
+    result = consume_quota(event, command, config)
     if not result.allowed:
         return result.message or "额度不足"
     return None

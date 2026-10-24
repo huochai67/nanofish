@@ -38,10 +38,12 @@ docker/          # 容器启动脚本
 | admin | `/eh`、`/auth` 管理子命令 |
 | superuser | `/health` |
 
+默认值由各插件在加载时通过 `register_command(name, default_role=..., quota=...)` 声明；`acl.plugins` 只填写需要覆盖的命令，未列出的命令使用插件声明的默认值。未注册的命令名会在启动时直接报错。
+
 范围：
 
-- `ACL_ALLOWED_GROUPS`：群白名单（空=不限制；对所有角色生效）
-- `ACL_ALLOW_PRIVATE`：是否允许私聊（对所有角色生效）
+- `acl.acl_allowed_groups`：群白名单（空=不限制；对所有角色生效）
+- `acl.acl_allow_private`：是否允许私聊（对所有角色生效）
 - 运行时可用 `/auth group enable|disable|reset` 覆盖单群
 
 配额（superuser 不限）：
@@ -49,10 +51,11 @@ docker/          # 容器启动脚本
 - `/genai` 默认 20 次/日、冷却 10s
 - `/eh` 默认 20 次/日、冷却 10s
 - `/imgsearch` 默认 20 次/日、冷却 10s
+- `/agent` 默认 20 次/日、冷却 10s
 
 每命令限流：
 
-- `ACL_RATE_LIMIT_<COMMAND>_PER_MINUTE` 为对应高成本命令跨所有用户共享的滚动 60 秒请求上限；`0` 表示关闭，superuser 也计入。
+- `acl.plugins[].rate_limit_per_minute` 为对应高成本命令跨所有用户共享的滚动 60 秒请求上限；`0` 表示关闭，superuser 也计入。
 
 常用管理：
 
@@ -136,7 +139,7 @@ docker compose up -d --build
 
 ## 配置
 
-环境变量见 [`.env.example`](.env.example)，仅用于 NoneBot 基础配置、全局网络与日志，以及截图页面插件。业务插件配置见 [`config.example.yaml`](config.example.yaml)：插件名为一级键、插件配置项为二级键；ACL 的功能配置位于 `acl.plugins` 列表中。`.env`、`.env.prod` 和 `config.yaml` 均不会提交；敏感项（API Key、exhentai cookie、Sightengine 凭证）只写入本地 `config.yaml`。
+环境变量见 [`.env.example`](.env.example)，仅用于 NoneBot 基础配置、全局网络与日志，以及截图页面插件。业务插件配置见 [`config.example.yaml`](config.example.yaml)：插件名为一级键、插件配置项为二级键；ACL 的功能配置位于 `acl.plugins` 列表中，仅需填写覆盖项，命令的默认角色与配额由插件自身注册。`.env`、`.env.prod` 和 `config.yaml` 均不会提交；敏感项（API Key、exhentai cookie、Sightengine 凭证）只写入本地 `config.yaml`。
 
 | 配置项 | 用途 |
 |------|------|
