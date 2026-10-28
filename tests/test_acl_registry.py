@@ -16,6 +16,7 @@ _EXPECTED_COMMANDS = {
     "auth",
     "jrrp",
     "health",
+    "draw",
     "genai",
     "eh",
     "imgsearch",
@@ -41,7 +42,13 @@ def _config(plugins: list[dict[str, object]] | None = None) -> Config:
 def test_expected_commands_are_registered() -> None:
     names = {spec.name for spec in registry.registered_commands()}
     assert names >= _EXPECTED_COMMANDS
-    assert set(registry.quota_commands()) == {"genai", "eh", "imgsearch", "agent"}
+    assert set(registry.quota_commands()) == {
+        "draw",
+        "genai",
+        "eh",
+        "imgsearch",
+        "agent",
+    }
 
 
 def test_example_config_matches_registry() -> None:

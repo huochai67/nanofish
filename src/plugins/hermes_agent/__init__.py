@@ -15,6 +15,7 @@ from nonebot.plugin import PluginMetadata
 from src.plugin_config import get_yaml_plugin_config
 
 require("acl")
+require("app")
 require("utils")
 require("nonebot_plugin_localstore")
 
@@ -27,6 +28,7 @@ from ..acl import (
     register_command,
     require_command,
 )
+from ..app import app_chat_image_cq
 from ..utils import (
     ProcessingReply,
     get_plaintext,
@@ -129,9 +131,7 @@ def _is_command_text(text: str) -> bool:
     if not stripped:
         return False
     prefixes = {
-        prefix
-        for prefix in (get_driver().config.command_start or set())
-        if prefix
+        prefix for prefix in (get_driver().config.command_start or set()) if prefix
     }
     return any(stripped.startswith(prefix) for prefix in prefixes)
 
@@ -163,8 +163,7 @@ def build_message_content(
     if text.strip():
         parts.append({"type": "text", "text": text})
     parts.extend(
-        {"type": "image_url", "image_url": {"url": image.data_url}}
-        for image in images
+        {"type": "image_url", "image_url": {"url": image.data_url}} for image in images
     )
     return parts
 
@@ -288,6 +287,40 @@ async def _create_session(profile: str, title: str) -> str:
         return await hermes_client.create_session(profile, None)
 
 
+async def _send_reply(
+    matcher: type[Matcher],
+    event: MessageEvent,
+    full_content: str,
+) -> list[str]:
+    chat_data = {
+        "messages": [
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": full_content}],
+            },
+        ],
+    }
+    try:
+        rendered = await app_chat_image_cq(chat_data)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "[hermes_agent] chat screenshot failed ({}); falling back to text",
+            exc,
+        )
+    else:
+        response = await matcher.send(reply_to_event(event, rendered))
+        message_id = _message_id(response)
+        return [message_id] if message_id is not None else []
+
+    sent: list[str] = []
+    for chunk in split_text(full_content, config.agent_outgoing_max_chars):
+        response = await matcher.send(reply_to_event(event, chunk))
+        message_id = _message_id(response)
+        if message_id is not None:
+            sent.append(message_id)
+    return sent
+
+
 async def _run_turn(
     matcher: type[Matcher],
     bot: Bot,
@@ -324,13 +357,8 @@ async def _run_turn(
             scope=scope,
             owner_id=int(event.user_id),
         )
-        sent: list[str] = []
-        for chunk in split_text(result.content, config.agent_outgoing_max_chars):
-            response = await matcher.send(reply_to_event(event, chunk))
-            message_id = _message_id(response)
-            if message_id is not None:
-                sent.append(message_id)
         full_content = result.content.strip() or _EMPTY_REPLY
+        sent = await _send_reply(matcher, event, full_content)
         await agent_store.record_messages(
             bot_id=str(bot.self_id),
             session_id=session_id,
@@ -402,11 +430,7 @@ async def handle_agent(
             "profile 名称无效：仅允许字母、数字、点、下划线和连字符。",
         )
     reply_id = get_replyid(event.original_message)
-    if (
-        not message
-        and reply_id is None
-        and not _has_attachment(event.original_message)
-    ):
+    if not message and reply_id is None and not _has_attachment(event.original_message):
         await agent.finish(
             "用法：/agent [@profile] <消息>（可引用一条消息附加文本或文件）",
         )

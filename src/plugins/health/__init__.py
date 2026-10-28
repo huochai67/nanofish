@@ -124,6 +124,30 @@ def _plugin_config(
     return getattr(plugin.module, attr, None)
 
 
+def check_llm() -> CheckResult:
+    cfg = _plugin_config("llm")
+    if cfg is None:
+        return CheckResult("LLM", Status.SKIP, "插件未加载")
+    default_model = getattr(cfg, "image_default_model", None)
+    models = getattr(cfg, "image_models", None)
+    profile = models.get(default_model) if isinstance(models, dict) else None
+    if not default_model or profile is None:
+        return CheckResult("LLM", Status.FAIL, "缺少配置: image_default_model")
+    model = getattr(profile, "model", None)
+    api_key = getattr(profile, "api_key", None)
+    api_base = getattr(profile, "api_base", None)
+    missing: list[str] = []
+    if not model:
+        missing.append("model")
+    if not api_key:
+        missing.append("api_key")
+    if not api_base:
+        missing.append("api_base")
+    if missing:
+        return CheckResult("LLM", Status.FAIL, f"缺少配置: {', '.join(missing)}")
+    return CheckResult("LLM", Status.OK, f"已配置 model={model}")
+
+
 _MIN_EHTAG_DICT_BYTES = 1024
 
 
@@ -191,6 +215,7 @@ async def handle_function(bot: Bot, event: MessageEvent) -> None:
             check_bots(),
             check_playwright(),
             await check_frontend(),
+            check_llm(),
             await check_eh_tags(),
             check_sightengine(),
         ]

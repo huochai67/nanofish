@@ -139,6 +139,7 @@ def _patch(
     monkeypatch: MonkeyPatch,
     store: AgentStore,
     client: _FakeClient,
+    rendered_calls: list[dict[str, Any]] | None = None,
 ) -> None:
     monkeypatch.setattr(agent_plugin, "agent_store", store)
     monkeypatch.setattr(agent_plugin, "hermes_client", client)
@@ -152,6 +153,13 @@ def _patch(
         "consume_quota",
         lambda *_args, **_kwargs: QuotaResult(allowed=True),
     )
+
+    async def fake_chat_image_cq(chat_data: dict[str, Any]) -> Message:
+        if rendered_calls is not None:
+            rendered_calls.append(chat_data)
+        return Message("[CQ:image,file=base64://AAA]")
+
+    monkeypatch.setattr(agent_plugin, "app_chat_image_cq", fake_chat_image_cq)
 
 
 def test_auth_message_distinguishes_missing_profile_key() -> None:
@@ -356,5 +364,45 @@ def test_handler_starts_new_session_for_direct_or_unknown_quote(
         assert "<reference>" in prompt
         assert "outside text" in prompt
         assert "explain" in prompt
+
+    asyncio.run(run())
+
+
+def test_handler_renders_assistant_reply_and_falls_back_to_text(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    async def run() -> None:
+        store = AgentStore(tmp_path / "agent.sqlite3")
+        client = _FakeClient()
+        rendered_calls: list[dict[str, Any]] = []
+        _patch(monkeypatch, store, client, rendered_calls)
+
+        bot = _FakeBot()
+        await _invoke(bot, _FakeEvent(10, Message("hello")), Message("hello"))
+        assert rendered_calls == [
+            {
+                "messages": [
+                    {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": "final answer"}],
+                    },
+                ],
+            },
+        ]
+        assert "[CQ:image,file=base64://AAA]" in str(bot.sent[-1])
+
+        async def failing_chat_image_cq(_chat_data: dict[str, Any]) -> Message:
+            msg = "playwright unavailable"
+            raise RuntimeError(msg)
+
+        monkeypatch.setattr(agent_plugin, "app_chat_image_cq", failing_chat_image_cq)
+        fallback_bot = _FakeBot(start_id=2000)
+        await _invoke(
+            fallback_bot,
+            _FakeEvent(20, Message("fallback")),
+            Message("fallback"),
+        )
+        assert "final answer" in str(fallback_bot.sent[-1])
 
     asyncio.run(run())

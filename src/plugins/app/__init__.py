@@ -281,6 +281,9 @@ class Client:
         finally:
             await page.close()
 
+    async def shoot_chat(self, chat_data: dict[str, Any]) -> str:
+        return await self.shoot_with_data("/chat", "__CHAT_DATA__", chat_data)
+
     async def shoot_eh(self, eh_data: dict[str, Any]) -> str:
         return await self.shoot_with_data("/eh", "__EH_DATA__", eh_data)
 
@@ -373,6 +376,15 @@ async def app_getimage_uri(api: str) -> str:
 
 async def app_getimage_cq(api: str) -> Message:
     base64img = await app_getimage_b64(api=api)
+    return Message(f"[CQ:image,file=base64://{base64img}]")
+
+
+async def app_chat_image_b64(chat_data: dict[str, Any]) -> str:
+    return await client.shoot_chat(chat_data)
+
+
+async def app_chat_image_cq(chat_data: dict[str, Any]) -> Message:
+    base64img = await app_chat_image_b64(chat_data)
     return Message(f"[CQ:image,file=base64://{base64img}]")
 
 

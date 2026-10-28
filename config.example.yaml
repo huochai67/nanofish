@@ -15,6 +15,11 @@ acl:
   plugins:
     - name: jrrp
       permission: guest
+    - name: draw
+      permission: user
+      quota_daily: 5
+      rate_limit_per_minute: 0
+      cooldown: 60
     - name: genai
       permission: user
       quota_daily: 20
@@ -77,6 +82,21 @@ health:
   # 前端 HTTP 探测超时，单位为秒。
   health_http_timeout: 5.0
 
+
+# LLM 生图插件（文生图/图生图）。API Key 仅填写本地 config.yaml。
+llm:
+  # 默认生图档案；必须对应 image_models 中的别名。
+  image_default_model: openai
+  image_models:
+    openai:
+      # OpenAI 兼容 Images API：capabilities 可选 text_to_image、image_to_image。
+      model: gpt-image-1
+      api_key: sk-xxx
+      api_base: https://api.openai.com/v1
+      capabilities: [text_to_image, image_to_image]
+      size: 1024x1024
+      response_format: b64_json
+      timeout: 120
 # AI 图检测插件。凭证从 Sightengine 控制台获取。
 genai_detect:
   sightengine_api_user: ""
